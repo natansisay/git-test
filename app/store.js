@@ -1,13 +1,14 @@
 // אחסון מקומי על הטלפון בלבד – בלי שרת, בלי עלות, בלי לשלוח מידע לאף אחד.
 // הגדרות (שמות, טלפונים) נשמרות ב-localStorage, תמונות והקלטות ב-IndexedDB.
 
-const SETTINGS_KEY = 'beteseb-settings';
+const SETTINGS_KEY = 'erdata-settings';
 
 const DEFAULTS = {
   lang: 'am',          // שפת ההקראה: am / he
   contacts: [],        // [{id, name, phone}]  תמונה: photo:<id>, קול: voice:<id>
   meds: [],            // [{id, name, times: ['morning', ...]}]
-  helperPhone: '',     // מספר וואטסאפ של מי שעוזר (מכתבים, שאלות)
+  helperPhone: '',     // מספר וואטסאפ של מי שעוזר (כפתור 🙋)
+  consented: false,    // האם המשתמש אישר שליחת תמונות/הקלטות לעיבוד
 };
 
 export function loadSettings() {
@@ -29,7 +30,7 @@ export const newId = () => Math.random().toString(36).slice(2, 10);
 let dbPromise;
 function db() {
   dbPromise ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open('beteseb', 1);
+    const req = indexedDB.open('erdata', 1);
     req.onupgradeneeded = () => req.result.createObjectStore('blobs');
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);

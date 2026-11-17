@@ -1,15 +1,21 @@
-import { TILES, EMERGENCY, TIMES, PHRASES, LESSONS } from './content.js';
+import { MAIN, EXTRAS, TILES, FACTS, EMERGENCY, TIMES, PHRASES, LESSONS } from './content.js';
 import { loadSettings, saveSettings, newId, putBlob, getBlob, delBlob, resizeImage } from './store.js';
-import { say, sayThen, startRecording } from './voice.js';
+import { say, sayThen, startRecording, playUrl, stop } from './voice.js';
+import { startWavRecording } from './recorder.js';
+import { API_URL } from './config.js';
 
 const app = document.getElementById('app');
 let S = loadSettings();
+
+// מצב זמני של השיחה הנוכחית (לא נשמר בשום מקום)
+const session = { photo: null, doc: null, result: null, audioUrl: null, recorder: null };
 
 // ---------- עזרים ----------
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const label = o => (S.lang === 'am' ? o.am : o.he);
 const sub = o => (S.lang === 'am' ? o.he : '');           // שורה קטנה בעברית לבני המשפחה
 const sayText = o => ({ am: o.sayAm ?? o.am, he: o.sayHe ?? o.he });
+const sayPhrase = k => say(k, PHRASES[k], S.lang);
 
 // 0501234567 -> 972501234567 (לקישורי וואטסאפ)
 export function intlPhone(p) {
@@ -21,13 +27,9 @@ export function intlPhone(p) {
 const telHref = p => 'tel:' + String(p || '').replace(/[^\d+*#]/g, '');
 const waHref = (p, text = '') => `https://wa.me/${intlPhone(p)}${text ? '?text=' + encodeURIComponent(text) : ''}`;
 
-function go(screen, arg) {
-  location.hash = arg !== undefined ? `${screen}/${arg}` : screen;
-}
-
+const go = (screen, arg) => { location.hash = arg !== undefined ? `${screen}/${arg}` : screen; };
 const homeBtn = `<button class="home-btn" data-go="home" aria-label="בית">🏠</button>`;
 
-// ממלא את כל התמונות שנשמרו במכשיר (img[data-photo])
 async function fillPhotos() {
   for (const img of app.querySelectorAll('img[data-photo]')) {
     const b = await getBlob(img.dataset.photo);
@@ -35,19 +37,167 @@ async function fillPhotos() {
   }
 }
 
+const blobToBase64 = blob => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result).split(',')[1]);
+  r.onerror = reject;
+  r.readAsDataURL(blob);
+});
+
+// ---------- תקשורת עם השרת ----------
+async function api(path, body) {
+  const res = await fetch(API_URL.replace(/\/$/, '') + path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error('api ' + res.status);
+  return res;
+}
+
+// תשובות לדוגמה כשאין שרת – כדי לבדוק את החוויה עם משתמשים לפני שמשקיעים בטכנולוגיה
+const DEMO_DOC = {
+  demo: true, readable: true, document_type: 'invitation', event: 'חתונה', date: '2026-12-10', weekday_he: 'חמישי',
+  time: '19:30', place: 'אולם "הגן", רחובות', missing: ['כתובת מלאה'], review_required: false, scam_warning: false,
+  summary_am: 'ይህ የሰርግ ጥሪ ነው። ሰርጉ ሐሙስ፣ ታኅሣሥ 10 በፈረንጆች አቆጣጠር፣ ከምሽቱ አንድ ሰዓት ተኩል፣ በረሆቮት በሚገኘው ሀጋን አዳራሽ ነው። ሙሉ አድራሻው አልተጻፈም።',
+  summary_he: 'זו הזמנה לחתונה. החתונה ביום חמישי, 10 בדצמבר, בשעה 19:30, באולם "הגן" ברחובות. הכתובת המלאה לא כתובה.',
+};
+const DEMO_ANSWER = {
+  demo: true, understood: true, question_he: 'מתי החתונה?', review_required: false, scam_warning: false, emergency: false,
+  answer_am: 'ሰርጉ ሐሙስ ከምሽቱ አንድ ሰዓት ተኩል ነው።', answer_he: 'החתונה ביום חמישי בשעה 19:30.',
+};
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+async function explainPhoto(blob) {
+  if (!API_URL) { await wait(1500); return DEMO_DOC; }
+  return (await api('/api/explain', { image: await blobToBase64(blob), mime: 'image/jpeg' })).json();
+}
+
+async function askAudio(blob) {
+  if (!API_URL) { await wait(1500); return DEMO_ANSWER; }
+  const r = session.doc; // שאלה על המסמך האחרון שצולם
+  const context = r && r.summary_he ? Object.fromEntries(
+    ['document_type', 'event', 'date', 'weekday_he', 'time', 'place', 'sender', 'amount', 'deadline', 'action_he', 'summary_he']
+      .filter(k => r[k]).map(k => [k, r[k]])) : undefined;
+  return (await api('/api/ask', { audio: await blobToBase64(blob), mime: 'audio/wav', context })).json();
+}
+
+// משמיע את התשובה: קול אמהרי מהשרת, ואם אין – הקראה של הטלפון
+async function playResult() {
+  const r = session.result;
+  if (!r) return;
+  const am = r.summary_am ?? r.answer_am, he = r.summary_he ?? r.answer_he;
+  try {
+    if (!session.audioUrl && r.speak && API_URL) {
+      const res = await api('/api/speak', r.speak);
+      session.audioUrl = URL.createObjectURL(await res.blob());
+    }
+    if (session.audioUrl) return await playUrl(session.audioUrl);
+  } catch { /* נמשיך להקראה */ }
+  return say('result:x', { am, he }, S.lang);
+}
+
+function setResult(r) {
+  if (session.audioUrl) URL.revokeObjectURL(session.audioUrl);
+  session.audioUrl = null;
+  session.result = r;
+}
+
 // ---------- מסכים ----------
 const screens = {
   home() {
     return `
-      <main class="grid">
-        ${TILES.map(t => `
-          <button class="tile ${t.color}" data-tile="${t.key}">
+      <main class="main-actions">
+        ${MAIN.map(t => `
+          <button class="big ${t.color}" data-tile="${t.key}">
             <span class="icon">${t.icon}</span>
-            <span class="lbl">${esc(label(t))}</span>
-            <span class="sub">${esc(sub(t))}</span>
+            <span class="txt"><span class="lbl">${esc(label(t))}</span><span class="sub">${esc(sub(t))}</span></span>
           </button>`).join('')}
       </main>
+      <nav class="extras">
+        ${EXTRAS.map(t => `
+          <button class="small ${t.color}" data-tile="${t.key}" aria-label="${esc(t.he)}">
+            <span class="icon">${t.icon}</span><span class="lbl">${esc(label(t))}</span>
+          </button>`).join('')}
+      </nav>
       <button class="gear" id="gear" aria-label="הגדרות (לחיצה ארוכה)">⚙️<span class="ring"></span></button>`;
+  },
+
+  // --- צילום מסמך ---
+  doc() {
+    if (!S.consented) return consentHtml('doc');
+    return `${homeBtn}
+      <main class="center">
+        <label class="big-action yellow">
+          <span class="icon">📷</span>
+          <span class="lbl">${esc(label(MAIN[0]))}</span>
+          <input type="file" accept="image/*" capture="environment" id="docPhoto" hidden>
+        </label>
+        <div class="hint-icons" aria-hidden="true">📄 ☀️ ✋</div>
+      </main>`;
+  },
+
+  // --- שאלה קולית ---
+  ask() {
+    if (!S.consented) return consentHtml('ask');
+    const about = session.doc?.summary_he
+      ? `<div class="about">📄 ${esc(session.doc.event || session.doc.sender || '')}</div>` : '';
+    return `${homeBtn}
+      <main class="center">
+        ${about}
+        <button class="mic" id="mic" aria-label="הקלטה">🎤</button>
+        <p class="step-text small" id="micText">${esc(label(PHRASES.tapToTalk))}</p>
+      </main>`;
+  },
+
+  working() {
+    return `<main class="center working"><div class="spinner"></div><div class="step-icon">⏳</div>
+      <p class="step-text">${esc(label(PHRASES.working))}</p></main>`;
+  },
+
+  result() {
+    const r = session.result;
+    if (!r) return screens.home();
+    const isDoc = 'readable' in r;
+    if ((isDoc && !r.readable) || r.understood === false) {
+      return `${homeBtn}<main class="center">
+        <div class="step-icon">${isDoc ? '📷❓' : '🎤❓'}</div>
+        <p class="step-text small">${esc(S.lang === 'am' ? (r.summary_am ?? r.answer_am) : (r.summary_he ?? r.answer_he))}</p>
+        <div class="step-nav">
+          <button class="again" data-play aria-label="שוב">🔁</button>
+          <button class="next yellow" data-go="${isDoc ? 'doc' : 'ask'}" aria-label="שוב">${isDoc ? '📷' : '🎤'}</button>
+        </div></main>`;
+    }
+    const facts = isDoc ? FACTS.filter(f => r[f.key]).map(f => {
+      let v = r[f.key];
+      if (f.key === 'date' || f.key === 'deadline') v = formatDate(v, f.key === 'date' ? r.weekday_he : '');
+      return `<div class="fact"><span class="icon">${f.icon}</span><span><small>${f.he}</small>${esc(v)}</span></div>`;
+    }).join('') : `<div class="fact"><span class="icon">❓</span><span>${esc(r.question_he || '')}</span></div>`;
+    const warn = r.scam_warning ? 'scam' : r.emergency ? 'emergency' : r.review_required ? 'review' : '';
+    return `${homeBtn}
+      <main class="result">
+        ${r.demo ? `<div class="demo">🧪 ${esc(PHRASES.demo.he)}</div>` : ''}
+        ${warn === 'scam' ? `<button class="warn red" data-say="scam">⚠️💰🚫 ${esc(label(PHRASES.scam))}</button>` : ''}
+        ${warn === 'review' ? `<button class="warn yellow" data-say="review">⚠️🙋 ${esc(label(PHRASES.review))}</button>` : ''}
+        ${warn === 'emergency' ? `<button class="warn red" data-emergency="mda">🚑 101</button>` : ''}
+        <button class="play" data-play aria-label="השמעה">🔊</button>
+        <div class="facts">${facts}</div>
+        <details class="fulltext"><summary>📝 הטקסט בעברית (לבני משפחה)</summary><p>${esc(r.summary_he ?? r.answer_he)}</p></details>
+        <div class="result-nav">
+          <button class="blue" data-go="ask" aria-label="לשאול">🎤</button>
+          <button class="green ${warn ? 'pulse' : ''}" data-go="human" aria-label="עזרה מאדם">🙋</button>
+        </div>
+      </main>`;
+  },
+
+  // --- עזרה מאדם ---
+  human() {
+    if (!S.helperPhone) return `${homeBtn}<p class="empty" data-say="noHelper">🙋 ❓<br>${esc(label(PHRASES.noHelper))}</p>`;
+    return `${homeBtn}
+      <main class="list">
+        <a class="row green" href="${telHref(S.helperPhone)}" data-helpcall><span class="icon">📞</span>
+          <span class="lbl">${esc(label(PHRASES.call))}</span></a>
+        <button class="row wa" data-helpwa><span class="icon">💬</span>
+          <span class="lbl">${esc(label(PHRASES.whatsapp))}</span>${session.photo ? '<span class="num">📄</span>' : ''}</button>
+      </main>`;
   },
 
   family() {
@@ -106,18 +256,6 @@ const screens = {
       </main>`;
   },
 
-  letter() {
-    return `${homeBtn}
-      <main class="center">
-        <label class="big-action yellow">
-          <span class="icon">📷</span>
-          <span class="lbl">${esc(label(PHRASES.takePhoto))}</span>
-          <input type="file" accept="image/*" capture="environment" id="letterPhoto" hidden>
-        </label>
-        <p id="letterStatus" class="status"></p>
-      </main>`;
-  },
-
   learn() {
     return `${homeBtn}
       <main class="grid">
@@ -136,13 +274,13 @@ const screens = {
     if (!l) return screens.learn();
     const i = Math.min(+n, l.steps.length);
     if (i === l.steps.length) {
-      return `${homeBtn}<main class="center" data-autosay="done"><div class="step-icon">🎉</div>
+      return `${homeBtn}<main class="center"><div class="step-icon">🎉</div>
         <p class="step-text">${esc(label(PHRASES.done))}</p>
         <button class="next green" data-go="learn">✔</button></main>`;
     }
     const st = l.steps[i];
     return `${homeBtn}
-      <main class="center lesson" data-autosay="lesson-${l.key}-${i + 1}">
+      <main class="center lesson">
         <div class="dots">${l.steps.map((_, j) => `<span class="${j <= i ? 'on' : ''}"></span>`).join('')}</div>
         <div class="step-icon">${st.icon}</div>
         <p class="step-text">${esc(label(st))}</p>
@@ -156,6 +294,25 @@ const screens = {
   settings: () => settingsHtml(),
 };
 
+function consentHtml(next) {
+  return `${homeBtn}
+    <main class="center">
+      <div class="step-icon">🔒</div>
+      <p class="step-text small">${esc(label(PHRASES.consent))}</p>
+      <div class="step-nav">
+        <button class="again red" data-go="home" aria-label="לא">✖</button>
+        <button class="next green" data-consent="${next}" aria-label="כן">✔</button>
+      </div>
+    </main>`;
+}
+
+const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+function formatDate(iso, weekday) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (!m) return iso;
+  return `${weekday ? 'יום ' + weekday + ', ' : ''}${+m[3]} ב${HE_MONTHS[+m[2] - 1]} ${m[1]}`;
+}
+
 function nowTime() {
   const h = new Date().getHours();
   return h < 11 ? 'morning' : h < 16 ? 'noon' : h < 21 ? 'evening' : 'night';
@@ -163,6 +320,10 @@ function nowTime() {
 
 // מה להשמיע אוטומטית כשנכנסים למסך
 function autoSay(screen, arg) {
+  if ((screen === 'doc' || screen === 'ask') && !S.consented) return sayPhrase('consent');
+  if (screen === 'ask') return sayPhrase('tapToTalk');
+  if (screen === 'working') return sayPhrase('working');
+  if (screen === 'result') return playResult();
   const t = TILES.find(x => x.key === screen);
   if (t) return say(t.key, sayText(t), S.lang);
   if (screen === 'lesson') {
@@ -170,39 +331,105 @@ function autoSay(screen, arg) {
     const l = LESSONS.find(x => x.key === key);
     if (!l) return;
     const st = l.steps[+n];
-    if (st) say(`lesson-${l.key}-${+n + 1}`, st, S.lang);
-    else say('done', PHRASES.done, S.lang);
+    return st ? say(`lesson-${l.key}-${+n + 1}`, st, S.lang) : sayPhrase('done');
   }
   const empty = app.querySelector('[data-say]');
-  if (empty) say(empty.dataset.say, PHRASES[empty.dataset.say], S.lang);
+  if (empty) sayPhrase(empty.dataset.say);
 }
 
 function render() {
   const [screen = 'home', arg] = location.hash.slice(1).split('/');
+  if (screen !== 'ask' && session.recorder) { session.recorder.stop(); session.recorder = null; }
   const fn = screens[screen] || screens.home;
   app.innerHTML = fn(arg);
   document.documentElement.lang = screen === 'settings' ? 'he' : S.lang;
   document.documentElement.dir = screen === 'settings' || S.lang === 'he' ? 'rtl' : 'ltr';
   fillPhotos();
   if (screen === 'settings') bindSettings();
-  else if (screen === 'home') bindGear();
+  else if (screen === 'home') { stop(); bindGear(); }
   else autoSay(screen, arg);
-  if (screen === 'letter') bindLetter();
+  if (screen === 'doc') bindDoc();
+  if (screen === 'ask') bindAsk();
   window.scrollTo(0, 0);
+}
+
+// ---------- צילום → הסבר ----------
+function bindDoc() {
+  const input = document.getElementById('docPhoto');
+  if (!input) return;
+  input.addEventListener('change', async () => {
+    const file = input.files[0];
+    if (!file) return;
+    session.photo = await resizeImage(file, 1600); // מספיק חד כדי לקרוא עברית, קטן מספיק לרשת חלשה
+    go('working');
+    try {
+      const r = await explainPhoto(session.photo);
+      session.doc = r.readable ? r : null;
+      setResult(r);
+      go('result');
+    } catch {
+      app.innerHTML = errorHtml(); sayPhrase('error');
+    }
+  });
+}
+
+// ---------- שאלה קולית: לגעת → לדבר → לגעת שוב ----------
+function bindAsk() {
+  const mic = document.getElementById('mic');
+  if (!mic) return;
+  mic.addEventListener('click', async () => {
+    if (!session.recorder) {
+      stop();
+      try { session.recorder = await startWavRecording(); } catch { alert('🎤 ❌'); return; }
+      mic.classList.add('on'); mic.textContent = '⏹';
+      return;
+    }
+    const { blob, seconds } = await session.recorder.stop();
+    session.recorder = null;
+    if (seconds < 1) { render(); return; }
+    go('working');
+    try {
+      setResult(await askAudio(blob));
+      go('result');
+    } catch {
+      app.innerHTML = errorHtml(); sayPhrase('error');
+    }
+  });
+}
+
+function errorHtml() {
+  return `${homeBtn}<main class="center"><div class="step-icon">😕</div>
+    <p class="step-text small">${esc(label(PHRASES.error))}</p>
+    <div class="step-nav"><button class="again" data-go="human">🙋</button>
+    <button class="next yellow" data-go="doc">📷</button></div></main>`;
+}
+
+// ---------- עזרה מאדם: שולח את התמונה וההסבר לעוזר בוואטסאפ ----------
+async function sendToHelper() {
+  const r = session.result;
+  const text = ['שלום, אני צריך/ה עזרה 🙏', r?.summary_he || r?.answer_he ? `מה המערכת הבינה: ${r.summary_he ?? r.answer_he}` : '']
+    .filter(Boolean).join('\n');
+  if (session.photo) {
+    const f = new File([session.photo], 'document.jpg', { type: 'image/jpeg' });
+    if (navigator.canShare?.({ files: [f] })) {
+      try { await navigator.share({ files: [f], text }); return sayPhrase('sent'); } catch { return; }
+    }
+  }
+  location.href = waHref(S.helperPhone, text);
 }
 
 // ---------- לחיצות ----------
 app.addEventListener('click', e => {
-  const b = e.target.closest('button, [data-say]');
+  const b = e.target.closest('button, [data-say], a');
   if (!b) return;
   const d = b.dataset;
   const contact = id => S.contacts.find(c => c.id === id);
 
   if (d.go) return go(d.go, d.arg);
-  if (d.tile) {
-    const t = TILES.find(x => x.key === d.tile);
-    return go(t.key); // המסך עצמו משמיע את השם
-  }
+  if (d.tile) return go(d.tile); // המסך עצמו משמיע את השם
+  if (d.consent) { S.consented = true; saveSettings(S); return render(); }
+  if (d.play !== undefined) return playResult();
+  if (d.helpwa !== undefined) return sendToHelper();
   if (d.call) {
     const c = contact(d.call);
     return sayThen('contact:' + c.id, { he: c.name, am: c.name }, S.lang, () => (location.href = telHref(c.phone)));
@@ -215,14 +442,11 @@ app.addEventListener('click', e => {
     const em = EMERGENCY.find(x => x.key === d.emergency);
     return sayThen(em.key, sayText(em), S.lang, () => (location.href = telHref(em.number)));
   }
-  if (d.med) {
-    const m = S.meds.find(x => x.id === d.med);
-    return say('med:' + m.id, { he: m.name, am: m.name }, S.lang);
-  }
+  if (d.med) { const m = S.meds.find(x => x.id === d.med); return say('med:' + m.id, { he: m.name, am: m.name }, S.lang); }
   if (d.time) { const t = TIMES.find(x => x.key === d.time); return say('time-' + t.key, t, S.lang); }
   if (d.lesson) return go('lesson', d.lesson + '.0');
   if (d.again !== undefined) { const [, arg] = location.hash.slice(1).split('/'); return autoSay('lesson', arg); }
-  if (d.say) return say(d.say, PHRASES[d.say], S.lang);
+  if (d.say) return sayPhrase(d.say);
 });
 
 // גלגל השיניים: צריך להחזיק 3 שניות – כדי שלא ייכנסו להגדרות בטעות
@@ -238,34 +462,11 @@ function bindGear() {
   g.addEventListener('contextmenu', e => e.preventDefault());
 }
 
-// צילום מכתב ושליחה לעוזר בוואטסאפ
-function bindLetter() {
-  const input = document.getElementById('letterPhoto');
-  const status = document.getElementById('letterStatus');
-  input.addEventListener('change', async () => {
-    const file = input.files[0];
-    if (!file) return;
-    if (!S.helperPhone) { status.textContent = '❗ ' + label(PHRASES.noHelper); return say('noHelper', PHRASES.noHelper, S.lang); }
-    const text = 'שלום, קיבלתי את המכתב הזה ואני צריך/ה עזרה להבין אותו 🙏';
-    const shareFile = new File([file], 'letter.jpg', { type: file.type || 'image/jpeg' });
-    try {
-      // באנדרואיד: פותח את חלון השיתוף, בוחרים וואטסאפ ואת העוזר
-      if (navigator.canShare?.({ files: [shareFile] })) {
-        await navigator.share({ files: [shareFile], text });
-      } else {
-        location.href = waHref(S.helperPhone, text); // גיבוי: פותח צ'אט עם העוזר, מצרפים את התמונה ידנית
-      }
-      status.textContent = '✅ ' + label(PHRASES.sent);
-      say('sent', PHRASES.sent, S.lang);
-    } catch { /* המשתמש ביטל */ }
-  });
-}
-
 // ---------- מסך הגדרות (לבני המשפחה, בעברית) ----------
 function settingsHtml() {
   const recBtns = key => `
     <button type="button" class="mini rec" data-rec="${key}">🎙️ הקלטה</button>
-    <button type="button" class="mini" data-play="${key}">🔊</button>`;
+    <button type="button" class="mini" data-playrec="${key}">🔊</button>`;
   return `
   <main class="settings">
     <header><h1>הגדרות למשפחה</h1><button class="mini" data-go="home">✖ סגירה</button></header>
@@ -276,6 +477,20 @@ function settingsHtml() {
         <option value="am" ${S.lang === 'am' ? 'selected' : ''}>አማርኛ אמהרית</option>
         <option value="he" ${S.lang === 'he' ? 'selected' : ''}>עברית</option>
       </select>
+    </section>
+
+    <section>
+      <h2>מי עוזר? (כפתור 🙋)</h2>
+      <p class="hint">מספר הוואטסאפ של בן/בת משפחה, מתנדב/ת, או של בוט ה"גשר" למתנדבים. לשם יישלחו מסמכים כשצריך עזרה מאדם.</p>
+      <input id="helper" type="tel" value="${esc(S.helperPhone)}" placeholder="05X-XXXXXXX" dir="ltr">
+    </section>
+
+    <section>
+      <h2>פרטיות</h2>
+      <p class="hint">${S.consented ? '✅ ההורה אישר/ה שליחת תמונות והקלטות לעיבוד.' : 'עדיין לא ניתן אישור לשליחת תמונות והקלטות.'}
+      תמונות והקלטות נשלחות לשירות AI כדי לקרוא ולהבין אותן ולא נשמרות בשרת שלנו.
+      בשכבה החינמית של Google ייתכן שהמידע ישמש את Google לשיפור השירות – לכן בתקופת הניסוי כדאי להשתמש במסמכים לא רגישים.</p>
+      ${S.consented ? '<button type="button" class="mini" id="revoke">ביטול האישור</button>' : ''}
     </section>
 
     <section>
@@ -315,12 +530,6 @@ function settingsHtml() {
     </section>
 
     <section>
-      <h2>מי עוזר עם מכתבים?</h2>
-      <p class="hint">מספר הוואטסאפ שאליו יישלחו תמונות של מכתבים (בן/בת משפחה או מתנדב/ת).</p>
-      <input id="helper" type="tel" value="${esc(S.helperPhone)}" placeholder="05X-XXXXXXX" dir="ltr">
-    </section>
-
-    <section>
       <h2>הקלטת הכפתורים בקול שלכם</h2>
       <p class="hint">אם המכשיר לא יודע להקריא אמהרית – הקליטו כאן כל כפתור. ההקלטה נשמרת רק בטלפון הזה.</p>
       ${[...TILES, ...EMERGENCY].map(t => `
@@ -329,14 +538,16 @@ function settingsHtml() {
           ${recBtns(t.key)}</div>`).join('')}
     </section>
 
-    <p class="hint">כל המידע נשמר רק במכשיר הזה. שום דבר לא נשלח לשרת.</p>
+    <p class="hint">${API_URL ? '🟢 מחובר לשרת' : '🧪 מצב הדגמה – השרת עוד לא מחובר (config.js)'}</p>
   </main>`;
 }
 
 function bindSettings() {
-  const persist = () => { saveSettings(S); };
+  const persist = () => saveSettings(S);
   document.getElementById('lang').onchange = e => { S.lang = e.target.value; persist(); };
   document.getElementById('helper').onchange = e => { S.helperPhone = e.target.value.trim(); persist(); };
+  const revoke = document.getElementById('revoke');
+  if (revoke) revoke.onclick = () => { S.consented = false; persist(); render(); };
 
   const savePhoto = async (form, id) => {
     const f = form.photo.files[0];
@@ -376,7 +587,7 @@ function bindSettings() {
       await delBlob('photo:' + d.delMed); await delBlob('voice:med:' + d.delMed);
       persist(); render();
     }
-    if (d.play) say(d.play, {}, S.lang);
+    if (d.playrec) say(d.playrec, {}, S.lang);
     if (d.rec) {
       if (recording) {
         const blob = await recording.stop();

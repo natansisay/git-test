@@ -7,12 +7,13 @@ import { getBlob } from './store.js';
 
 let current;
 
-function stop() {
+export function stop() {
   if (current) { current.pause(); current = undefined; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 }
 
-function playUrl(url) {
+export function playUrl(url) {
+  stop();
   return new Promise((resolve, reject) => {
     const a = new Audio(url);
     current = a;

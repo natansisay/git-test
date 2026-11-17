@@ -8,6 +8,11 @@
 //    עובר אליו – בלי שהמבוגר צריך לשמור מספרים חדשים.
 //
 // Node.js 18+ בלי חבילות חיצוניות. משתמש ב-WhatsApp Cloud API הרשמי של Meta.
+// בכוונה אין כאן AI: תנאי Meta מגבילים בוטים שה-AI הוא עיקרם. ה-AI נמצא באתר (worker/).
+//
+// הקמה: developers.facebook.com → Create App → Business → WhatsApp → מקבלים PHONE_NUMBER_ID וטוקן.
+// מריצים את השרת באירוח עם שכבה חינמית, ומגדירים Webhook: https://<השרת>/webhook + VERIFY_TOKEN, ונרשמים ל-messages.
+// שימו לב: אפשר לשלוח למתנדב רק אם הוא כתב לבוט ב-24 השעות האחרונות (מתנדב תורן שולח "בוקר טוב" כל בוקר).
 
 import http from 'node:http';
 import crypto from 'node:crypto';

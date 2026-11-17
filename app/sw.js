@@ -1,6 +1,6 @@
 // מאפשר לאפליקציה לעבוד גם בלי אינטרנט אחרי הפתיחה הראשונה
-const CACHE = 'beteseb-v1';
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'content.js', 'store.js', 'voice.js', 'icon.svg', 'manifest.webmanifest'];
+const CACHE = 'erdata-v2';
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'content.js', 'store.js', 'voice.js', 'recorder.js', 'config.js', 'icon.svg', 'manifest.webmanifest'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
