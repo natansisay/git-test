@@ -1,0 +1,134 @@
+/* עיצוב למבוגרים: כפתורים ענקיים, צבע + אייקון לכל פעולה, ניגודיות גבוהה, בלי תפריטים נסתרים */
+:root {
+  --bg: #fdf8ef; --ink: #1d1d1b; --card: #ffffff;
+  --green: #1f7a4d; --red: #b8322a; --blue: #1f5fa8; --yellow: #e0a400; --purple: #6b3fa0; --wa: #25d366;
+  --r: 28px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body {
+  font-family: "Noto Sans Ethiopic", "Abyssinica SIL", "Nyala", system-ui, sans-serif;
+  font-size: 22px; min-height: 100dvh;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  user-select: none;
+}
+button { font: inherit; color: inherit; cursor: pointer; border: 0; touch-action: manipulation; }
+button:active { transform: scale(.97); }
+img { display: block; }
+[hidden] { display: none !important; }
+
+/* מסך הבית */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 42vw; max-height: 260px; border-radius: var(--r); color: #fff;
+  box-shadow: 0 6px 0 rgba(0,0,0,.18);
+}
+.tile:first-child { grid-column: 1 / -1; min-height: 46vw; } /* משפחה – הכי חשוב, הכי גדול */
+.tile .icon { font-size: 72px; line-height: 1; }
+.tile .lbl { font-size: 30px; font-weight: 700; }
+.tile .sub { font-size: 17px; opacity: .85; }
+.green { background: var(--green); color: #fff; }
+.red { background: var(--red); color: #fff; }
+.blue { background: var(--blue); color: #fff; }
+.yellow { background: var(--yellow); color: #1d1d1b; }
+.purple { background: var(--purple); color: #fff; }
+
+.gear {
+  position: fixed; inset-inline-end: 14px; bottom: 14px; width: 56px; height: 56px;
+  border-radius: 50%; background: #e9e2d4; font-size: 26px; opacity: .6;
+}
+.gear .ring { position: absolute; inset: 0; border-radius: 50%; border: 4px solid var(--green); clip-path: inset(100% 0 0 0); }
+.gear.holding .ring { transition: clip-path 3s linear; clip-path: inset(0 0 0 0); }
+
+/* כפתור חזרה הביתה – תמיד באותו מקום */
+.home-btn {
+  display: block; width: 100%; height: 76px; margin-bottom: 16px; border-radius: var(--r);
+  background: #e9e2d4; font-size: 44px;
+}
+
+/* משפחה */
+.people { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.person { background: var(--card); border-radius: var(--r); padding: 10px; box-shadow: 0 4px 0 rgba(0,0,0,.08); }
+.face { display: block; width: 100%; padding: 0; background: none; position: relative; }
+.face img, .face .initial {
+  width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 20px;
+}
+.face .initial { display: grid; place-items: center; background: #d9e8df; font-size: 80px; font-weight: 700; }
+.face .name { display: block; margin-top: 6px; font-size: 22px; font-weight: 700; text-align: center; }
+.actions { display: flex; gap: 8px; margin-top: 8px; }
+.act { flex: 1; height: 64px; border-radius: 18px; font-size: 32px; }
+.act.wa { background: var(--wa); }
+
+/* רשימות (חירום, תרופות) */
+.list { display: flex; flex-direction: column; gap: 16px; }
+.row {
+  display: flex; align-items: center; gap: 16px; padding: 16px 20px; min-height: 110px;
+  border-radius: var(--r); text-align: start; box-shadow: 0 6px 0 rgba(0,0,0,.18);
+}
+.row .icon { font-size: 54px; width: 70px; display: grid; place-items: center; }
+.row .icon img { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; }
+.row .lbl { flex: 1; font-size: 28px; font-weight: 700; }
+.row .lbl small { display: block; font-size: 17px; font-weight: 400; opacity: .85; }
+.row .num { font-size: 40px; font-weight: 800; direction: ltr; }
+
+.time { background: var(--card); border-radius: var(--r); padding: 12px; }
+.time.now { outline: 6px solid var(--yellow); }
+.time-head { display: flex; align-items: center; gap: 10px; background: none; font-size: 28px; font-weight: 700; }
+.time-head .icon { font-size: 48px; }
+.pills { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.pill { background: #e8eff8; border-radius: 20px; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+.pill img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; }
+.pill .icon { font-size: 64px; }
+.pill .name { font-size: 18px; margin-top: 4px; }
+
+/* מכתב / שיעורים */
+.center { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 20px; }
+.big-action {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 100%; min-height: 60vw; border-radius: var(--r); box-shadow: 0 6px 0 rgba(0,0,0,.18); cursor: pointer;
+}
+.big-action .icon { font-size: 110px; }
+.big-action .lbl { font-size: 32px; font-weight: 700; }
+.status { font-size: 26px; }
+.empty { text-align: center; font-size: 26px; line-height: 1.6; margin-top: 10vh; }
+.empty::first-line { font-size: 80px; }
+
+.dots { display: flex; gap: 10px; }
+.dots span { width: 18px; height: 18px; border-radius: 50%; background: #d8d0c0; }
+.dots span.on { background: var(--purple); }
+.step-icon { font-size: 150px; line-height: 1.1; }
+.step-text { font-size: 30px; font-weight: 700; line-height: 1.5; margin: 0; min-height: 3em; }
+.step-nav { display: flex; gap: 16px; width: 100%; }
+.again { flex: 1; height: 100px; border-radius: var(--r); background: #e9e2d4; font-size: 44px; }
+.next { flex: 2; height: 100px; border-radius: var(--r); font-size: 50px; box-shadow: 0 6px 0 rgba(0,0,0,.18); }
+.center > .next { width: 100%; flex: none; }
+
+/* מסך הגדרות – לבני המשפחה, טקסט רגיל */
+.settings { font-family: system-ui, sans-serif; font-size: 17px; user-select: text; padding-bottom: 60px; }
+.settings header { display: flex; justify-content: space-between; align-items: center; }
+.settings h1 { font-size: 24px; margin: 0; }
+.settings h2 { font-size: 19px; margin: 0 0 6px; }
+.settings section { background: var(--card); border-radius: 16px; padding: 14px; margin-top: 14px; }
+.settings .hint { color: #6a6458; font-size: 15px; margin: 4px 0 10px; }
+.settings input, .settings select { font: inherit; padding: 10px; border: 1px solid #cfc6b4; border-radius: 10px; width: 100%; }
+.settings .add { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.settings .add > button, .settings .file {
+  padding: 12px; border-radius: 10px; background: var(--green); color: #fff; text-align: center; font-weight: 600;
+}
+.settings .file { background: #e9e2d4; color: var(--ink); cursor: pointer; }
+.settings .times { display: flex; flex-wrap: wrap; gap: 10px; }
+.settings .times label { display: flex; gap: 4px; align-items: center; }
+.settings .times input { width: auto; }
+.item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee5d5; }
+.item img, .item .ph { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; font-size: 30px; display: grid; place-items: center; }
+.item .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mini { padding: 8px 10px; border-radius: 10px; background: #e9e2d4; font-size: 15px; white-space: nowrap; }
+.mini.rec.on { background: var(--red); color: #fff; }
+.mini.danger { background: #f3d6d3; }
+
+@media (min-width: 700px) {
+  body { max-width: 640px; margin: 0 auto; }
+  .tile { min-height: 220px; } .tile:first-child { min-height: 240px; }
+  .big-action { min-height: 340px; }
+}
