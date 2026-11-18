@@ -23,8 +23,9 @@ export const EXPLAIN_PROMPT = `${CORE_RULES}
 
 You get a photo of a document (usually Hebrew: letters from Bituach Leumi, municipality, health fund (kupat holim),
 appointment notices, bills, wedding/event invitations).
-First decide if the photo is readable. If the text is cut off, blurry or too dark, set readable=false and in summary_am
-ask kindly to take the photo again: the whole page, with good light, phone held still.`;
+First decide if the photo is readable. If it is not, set readable=false, set retake_hint to the main problem
+(cut_off = part of the page is outside the photo, blurry, dark, glare = light reflection, too_far = text too small,
+not_document = no document visible), and in summary_am say kindly what ONE thing to do differently.`;
 
 export const ASK_PROMPT = `${CORE_RULES}
 
@@ -42,6 +43,7 @@ export const EXPLAIN_SCHEMA = {
   type: 'OBJECT',
   properties: {
     readable: B('false if the photo is not clear enough to read reliably'),
+    retake_hint: S('if not readable: the main problem', { nullable: true, enum: ['cut_off', 'blurry', 'dark', 'glare', 'too_far', 'not_document'] }),
     document_type: S('kind of document', {
       enum: ['invitation', 'appointment', 'letter', 'bill', 'medical', 'legal', 'advertisement', 'other', 'unreadable'],
     }),
@@ -75,4 +77,38 @@ export const ASK_SCHEMA = {
     emergency: B('true if this sounds like an emergency'),
   },
   required: ['understood', 'answer_am', 'answer_he', 'review_required', 'scam_warning', 'emergency'],
+};
+
+// ---------- מתורגמן בשיחה (בית מרקחת, בנק, קופת חולים) ----------
+export const TRANSLATE_PROMPT = `You are a live interpreter on a phone, between an elderly Amharic speaker (the USER, who may not read)
+and a Hebrew-speaking service provider in Israel (the PROVIDER: pharmacist, bank clerk, receptionist).
+You get ONE utterance, and the recent conversation for context.
+
+- Translate faithfully, in first person, as if you were the speaker. Do not add, explain or drop anything.
+  Keep names, medicine names, numbers, amounts, dates and quantities exact.
+- If part of the utterance was not heard clearly, or a number, amount, date, medicine name or quantity is ambiguous
+  (for example "fifty" vs "five hundred"), set needs_clarification=true and write clarify_question IN THE SPEAKER'S
+  OWN LANGUAGE, politely asking to repeat only that part. Translate whatever was clear.
+- If the provider asks for a code from an SMS, a password, a PIN, full card details, or pushes the user to sign or pay
+  something urgently or unusually: sensitive=true and sensitive_note_am = a short Amharic note in YOUR OWN voice,
+  starting with "ረዳትዎ ነው የሚናገረው።" (this is your assistant speaking), saying what was asked and that the user may stop
+  and check with someone they trust. Ordinary requests (show an ID card, wait in line, pay the usual co-payment)
+  are NOT sensitive.
+- If an amount, date, dose or quantity was stated and a paper or receipt could confirm it, verify_hint_am may suggest,
+  in one short Amharic sentence, photographing that paper to check. Otherwise null.
+- All Amharic is read aloud: short, simple, spoken words, polite form, no symbols.`;
+
+export const TRANSLATE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    heard_ok: B('false if nothing usable was understood'),
+    original: S('what was said, in the original language'),
+    translation: S('the translation into the other language (Hebrew if the USER spoke, Amharic if the PROVIDER spoke)'),
+    needs_clarification: B('true if part must be repeated'),
+    clarify_question: S("question to the SPEAKER in the speaker's own language", { nullable: true }),
+    sensitive: B('true if this needs the assistant warning'),
+    sensitive_note_am: S('assistant warning in Amharic', { nullable: true }),
+    verify_hint_am: S('suggestion to photograph a paper to check, in Amharic', { nullable: true }),
+  },
+  required: ['heard_ok', 'original', 'translation', 'needs_clarification', 'sensitive'],
 };

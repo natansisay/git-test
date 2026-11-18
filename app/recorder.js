@@ -5,7 +5,8 @@
 const RATE = 16000;
 const MAX_SECONDS = 60;
 
-export async function startWavRecording() {
+// onSilence: נקרא פעם אחת כשהאדם דיבר ואז שתק כשנייה וחצי – כדי לעצור לבד, בלי לחיצה נוספת
+export async function startWavRecording({ onSilence } = {}) {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
   });
@@ -14,9 +15,18 @@ export async function startWavRecording() {
   const proc = ctx.createScriptProcessor(4096, 1, 1);
   const chunks = [];
   let length = 0;
+  let spoke = false, quietSince = 0, fired = false;
   proc.onaudioprocess = e => {
     if (length > ctx.sampleRate * MAX_SECONDS) return;
     const d = e.inputBuffer.getChannelData(0);
+    let sum = 0;
+    for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
+    const rms = Math.sqrt(sum / d.length), now = performance.now();
+    if (rms > 0.03) { spoke = true; quietSince = 0; }
+    else if (spoke && rms < 0.015) {
+      quietSince ||= now;
+      if (!fired && onSilence && now - quietSince > 1600) { fired = true; setTimeout(onSilence); }
+    }
     chunks.push(new Float32Array(d));
     length += d.length;
   };

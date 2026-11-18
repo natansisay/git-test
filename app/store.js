@@ -7,7 +7,8 @@ const DEFAULTS = {
   lang: 'am',          // שפת ההקראה: am / he
   contacts: [],        // [{id, name, phone}]  תמונה: photo:<id>, קול: voice:<id>
   meds: [],            // [{id, name, times: ['morning', ...]}]
-  helperPhone: '',     // מספר וואטסאפ של מי שעוזר (כפתור 🙋)
+  helperName: '',      // השם של מי שעוזר – נאמר בקול לפני שמתקשרים
+  helperPhone: '',     // מספר הטלפון/וואטסאפ שלו (כפתור 🙋)
   consented: false,    // האם המשתמש אישר שליחת תמונות/הקלטות לעיבוד
 };
 

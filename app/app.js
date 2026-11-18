@@ -1,21 +1,32 @@
-import { MAIN, EXTRAS, TILES, FACTS, EMERGENCY, TIMES, PHRASES, LESSONS } from './content.js';
+import { MAIN, HELP, EXTRAS, TILES, FACTS, EMERGENCY, TIMES, PHRASES, LESSONS } from './content.js';
 import { loadSettings, saveSettings, newId, putBlob, getBlob, delBlob, resizeImage } from './store.js';
-import { say, sayThen, startRecording, playUrl, stop } from './voice.js';
+import { say, sayThen, startRecording, stop } from './voice.js';
 import { startWavRecording } from './recorder.js';
-import { backend, explainPhoto, ask, speakResult, stopSpeaking } from './ai.js';
+import { backend, explainPhoto, ask, translate, speak, speakFixedAm, stopSpeaking } from './ai.js';
 
 const app = document.getElementById('app');
 let S = loadSettings();
 
-// מצב זמני של השיחה הנוכחית (לא נשמר בשום מקום)
-const session = { photo: null, doc: null, result: null, audioUrl: null, recorder: null };
+// מצב זמני של השימוש הנוכחי (לא נשמר בשום מקום)
+const session = {
+  photo: null,       // התמונה האחרונה שצולמה
+  photoUrl: null,
+  doc: null,         // ההסבר של המסמך האחרון שנקרא בהצלחה – לשאלות המשך
+  result: null,      // מה שמוצג במסך התשובה
+  fails: 0,          // כמה צילומים לא הצליחו ברצף
+  recorder: null,
+  typed: false,      // המשתמש ביקש להקליד במקום לדבר
+  talk: { turns: [], phase: 'user', busy: false, introduced: false, last: [] },
+};
 
 // ---------- עזרים ----------
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const label = o => (S.lang === 'am' ? o.am : o.he);
-const sub = o => (S.lang === 'am' ? o.he : '');           // שורה קטנה בעברית לבני המשפחה
+const L = o => (S.lang === 'am' ? o.am : o.he) || o.he;
+const sub = o => (S.lang === 'am' ? o.he : '');           // שורה קטנה בעברית לבני משפחה ולנותני שירות
+const aria = o => `aria-label="${esc(L(o))}"`;              // שם נגיש בשפת המשתמש
 const sayText = o => ({ am: o.sayAm ?? o.am, he: o.sayHe ?? o.he });
-const sayPhrase = k => say(k, PHRASES[k], S.lang);
+const sayPhrase = k => say(k, PHRASES[k], S.lang, () => S.lang === 'am' && speakFixedAm(PHRASES[k].am));
+const sayTile = t => say(t.key, sayText(t), S.lang, () => S.lang === 'am' && speakFixedAm(sayText(t).am));
 
 // 0501234567 -> 972501234567 (לקישורי וואטסאפ)
 export function intlPhone(p) {
@@ -27,14 +38,22 @@ export function intlPhone(p) {
 const telHref = p => 'tel:' + String(p || '').replace(/[^\d+*#]/g, '');
 const waHref = (p, text = '') => `https://wa.me/${intlPhone(p)}${text ? '?text=' + encodeURIComponent(text) : ''}`;
 
-const go = (screen, arg) => { location.hash = arg !== undefined ? `${screen}-${arg}` : screen; };
 // כתובות פשוטות בלבד (#doc, #lesson-answer-2) – כך זה עובד גם בדף ההדגמה ב-Claude
+const go = (screen, arg) => { location.hash = arg !== undefined ? `${screen}-${arg}` : screen; };
 function route() {
   const h = location.hash.slice(1);
   const i = h.indexOf('-');
   return i < 0 ? [h || 'home', undefined] : [h.slice(0, i), h.slice(i + 1)];
 }
-const homeBtn = `<button class="home-btn" data-go="home" aria-label="בית">🏠</button>`;
+
+// הפס התחתון: בית + עזרה מאדם – תמיד באותו מקום
+function bar({ home = true, help = true } = {}) {
+  return `<nav class="bar">
+    ${home ? `<button class="bar-home" data-go="home" ${aria(PHRASES.home)}>🏠</button>` : ''}
+    ${help ? `<button class="bar-help" data-go="human" ${aria(HELP)}><span class="icon">${HELP.icon}</span><span>${esc(L(HELP))}</span></button>` : ''}
+  </nav>`;
+}
+const speakerBtn = (attr, cls = '') => `<button class="speaker ${cls}" ${attr} ${aria(PHRASES.speakerBtn)}>🔊</button>`;
 
 async function fillPhotos() {
   for (const img of app.querySelectorAll('img[data-photo]')) {
@@ -43,191 +62,287 @@ async function fillPhotos() {
   }
 }
 
-// משמיע את התשובה: קול אמהרי (מהשרת / מ-Claude), ואם אין – הקראה של הטלפון
-async function playResult() {
+// ---------- השמעת תוצאה ----------
+async function playResult(rate = 1) {
   const r = session.result;
   if (!r) return;
-  try {
-    if (session.audioUrl) return await playUrl(session.audioUrl);
-    const out = await speakResult(r);
-    if (out === 'spoken') return;
-    if (out) { session.audioUrl = out; return await playUrl(out); }
-  } catch { /* נמשיך להקראה */ }
-  return say('result:x', { am: r.summary_am ?? r.answer_am, he: r.summary_he ?? r.answer_he }, S.lang);
-}
-
-function setResult(r) {
-  if (session.audioUrl) URL.revokeObjectURL(session.audioUrl);
-  session.audioUrl = null;
-  session.result = r;
+  const am = r.summary_am ?? r.answer_am, he = r.summary_he ?? r.answer_he;
+  if (S.lang === 'am' && await speak({ text: am, lang: 'am', signed: r.speak }, { rate })) return;
+  await speak({ text: he, lang: 'he' }, { rate });
 }
 
 // ---------- מסכים ----------
 const screens = {
   home() {
     return `
+      <header class="top">
+        ${speakerBtn('data-intro', 'big-speaker')}
+        <button class="gear" id="gear" aria-label="הגדרות למשפחה (לחיצה ארוכה)">⚙️<span class="ring"></span></button>
+      </header>
       <main class="main-actions">
         ${MAIN.map(t => `
-          <button class="big ${t.color}" data-tile="${t.key}">
+          <button class="big primary" data-tile="${t.key}" ${aria(t)}>
             <span class="icon">${t.icon}</span>
-            <span class="txt"><span class="lbl">${esc(label(t))}</span><span class="sub">${esc(sub(t))}</span></span>
+            <span class="txt"><span class="lbl">${esc(L(t))}</span><span class="sub">${esc(sub(t))}</span></span>
           </button>`).join('')}
       </main>
       <nav class="extras">
         ${EXTRAS.map(t => `
-          <button class="small ${t.color}" data-tile="${t.key}" aria-label="${esc(t.he)}">
-            <span class="icon">${t.icon}</span><span class="lbl">${esc(label(t))}</span>
+          <button class="extra ${t.key === 'emergency' ? 'danger' : ''}" data-tile="${t.key}" ${aria(t)}>
+            <span class="icon">${t.icon}</span><span class="lbl">${esc(L(t))}</span>
           </button>`).join('')}
       </nav>
-      <button class="gear" id="gear" aria-label="הגדרות (לחיצה ארוכה)">⚙️<span class="ring"></span></button>`;
+      ${bar({ home: false })}`;
   },
 
-  // --- צילום מסמך ---
+  // --- מכתב: הנחיה אחת, ושני כפתורים אמיתיים ---
   doc() {
-    if (!S.consented) return consentHtml('doc');
-    return `${homeBtn}
+    return `
       <main class="center">
-        <label class="big-action yellow">
-          <span class="icon">📷</span>
-          <span class="lbl">${esc(label(MAIN[0]))}</span>
-          <input type="file" accept="image/*" capture="environment" id="docPhoto" hidden>
-        </label>
-        <div class="hint-icons" aria-hidden="true">📄 ☀️ ✋</div>
-      </main>`;
+        <div class="guide">
+          <p class="step-text small">${esc(L(PHRASES.docGuide))}</p>
+          ${speakerBtn('data-say="docGuide"')}
+        </div>
+        <button class="big-action primary" data-pick="camera">
+          <span class="icon">📷</span><span class="lbl">${esc(L(PHRASES.takePhoto))}</span>
+        </button>
+        <button class="wide secondary" data-pick="file">
+          <span class="icon">🖼️</span><span>${esc(L(PHRASES.choosePhoto))}</span>
+        </button>
+        <input type="file" accept="image/*" capture="environment" id="camInput" hidden>
+        <input type="file" accept="image/*" id="fileInput" hidden>
+      </main>
+      ${bar()}`;
   },
 
-  // --- שאלה קולית ---
-  ask() {
-    if (!S.consented) return consentHtml('ask');
-    const about = session.doc?.summary_he
-      ? `<div class="about">📄 ${esc(session.doc.event || session.doc.sender || '')}</div>` : '';
-    return `${homeBtn}
+  // --- הסכמה: אחרי שבחרו תמונה ולפני שליחה. אפשר לשמוע שוב. כן ולא באותו גודל ---
+  consent(next) {
+    const thumb = next === 'send' && session.photoUrl ? `<img class="thumb" src="${session.photoUrl}" alt="">` : '<div class="step-icon">🔒</div>';
+    return `
       <main class="center">
-        ${about}
-        <button class="mic" id="mic" aria-label="הקלטה">🎤</button>
-        <p class="step-text small" id="micText">${esc(label(PHRASES.tapToTalk))}</p>
-      </main>`;
+        ${thumb}
+        <div class="guide">
+          <p class="step-text small">${esc(L(PHRASES.consent))}</p>
+          ${speakerBtn('data-say="consent"')}
+        </div>
+        <div class="yesno">
+          <button class="no" data-consent-no="${next}" ${aria(PHRASES.no)}>✖<span>${esc(L(PHRASES.no))}</span></button>
+          <button class="yes" data-consent-yes="${next}" ${aria(PHRASES.yes)}>✔<span>${esc(L(PHRASES.yes))}</span></button>
+        </div>
+      </main>
+      ${bar()}`;
   },
 
   working() {
-    return `<main class="center working"><div class="spinner"></div><div class="step-icon">⏳</div>
-      <p class="step-text">${esc(label(PHRASES.working))}</p></main>`;
+    return `<main class="center working" role="status"><div class="spinner"></div>
+      <p class="step-text">${esc(L(PHRASES.working))}</p></main>${bar()}`;
   },
 
   result() {
     const r = session.result;
     if (!r) return screens.home();
     const isDoc = 'readable' in r;
-    if ((isDoc && !r.readable) || r.understood === false) {
-      return `${homeBtn}<main class="center">
-        <div class="step-icon">${isDoc ? '📷❓' : '🎤❓'}</div>
-        <p class="step-text small">${esc(S.lang === 'am' ? (r.summary_am ?? r.answer_am) : (r.summary_he ?? r.answer_he))}</p>
-        <div class="step-nav">
-          <button class="again" data-play aria-label="שוב">🔁</button>
-          <button class="next yellow" data-go="${isDoc ? 'doc' : 'ask'}" aria-label="שוב">${isDoc ? '📷' : '🎤'}</button>
-        </div></main>`;
+
+    // צילום לא הצליח: מה בדיוק לתקן, ואחרי שני כישלונות – גם אדם
+    if (isDoc && !r.readable) {
+      const hint = PHRASES['hint_' + r.retake_hint] ? 'hint_' + r.retake_hint : 'hint_blurry';
+      const icon = { cut_off: '📄↕️', blurry: '📄〰️', dark: '🌑', glare: '✨', too_far: '🔍', not_document: '❓' }[r.retake_hint] || '📄〰️';
+      const stuck = session.fails >= 2;
+      return `
+        <main class="center">
+          <div class="step-icon">${icon}</div>
+          <div class="guide">
+            <p class="step-text small">${esc(L(PHRASES[hint]))}${stuck ? '<br>' + esc(L(PHRASES.stillStuck)) : ''}</p>
+            ${speakerBtn('data-say-result')}
+          </div>
+          <button class="big-action primary" data-go="doc"><span class="icon">📷</span><span class="lbl">${esc(L(PHRASES.again))}</span></button>
+          ${stuck ? `<button class="wide help" data-go="human"><span class="icon">📞</span><span>${esc(L(HELP))}</span></button>` : ''}
+        </main>
+        ${bar()}`;
     }
+    if (r.understood === false) {
+      return `
+        <main class="center">
+          <div class="step-icon">🎤❓</div>
+          <div class="guide"><p class="step-text small">${esc(L(PHRASES.notHeard))}</p>${speakerBtn('data-say="notHeard"')}</div>
+          <button class="big-action primary" data-go="ask"><span class="icon">🎤</span><span class="lbl">${esc(L(PHRASES.again))}</span></button>
+        </main>
+        ${bar()}`;
+    }
+
     const facts = isDoc ? FACTS.filter(f => r[f.key]).map(f => {
       let v = r[f.key];
       if (f.key === 'date' || f.key === 'deadline') v = formatDate(v, f.key === 'date' ? r.weekday_he : '');
       return `<div class="fact"><span class="icon">${f.icon}</span><span><small>${f.he}</small>${esc(v)}</span></div>`;
     }).join('') : `<div class="fact"><span class="icon">❓</span><span>${esc(r.question_he || '')}</span></div>`;
+    const missing = isDoc && r.missing?.length
+      ? `<div class="fact muted"><span class="icon">⚠️</span><span><small>לא כתוב במסמך</small>${esc(r.missing.join(', '))}</span></div>` : '';
     const warn = r.scam_warning ? 'scam' : r.emergency ? 'emergency' : r.review_required ? 'review' : '';
-    return `${homeBtn}
+    return `
       <main class="result">
         ${r.demo ? `<div class="demo">🧪 ${esc(PHRASES.demo.he)}</div>` : ''}
         ${r.via === 'claude' ? '<div class="demo">🤖 נקרא על ידי Claude (דף הדגמה)</div>' : ''}
-        ${warn === 'scam' ? `<button class="warn red" data-say="scam">⚠️💰🚫 ${esc(label(PHRASES.scam))}</button>` : ''}
-        ${warn === 'review' ? `<button class="warn yellow" data-say="review">⚠️🙋 ${esc(label(PHRASES.review))}</button>` : ''}
-        ${warn === 'emergency' ? `<button class="warn red" data-emergency="mda">🚑 101</button>` : ''}
-        <button class="play" data-play aria-label="השמעה">🔊</button>
-        <div class="facts">${facts}</div>
-        <details class="fulltext"><summary>📝 הטקסט בעברית (לבני משפחה)</summary><p>${esc(r.summary_he ?? r.answer_he)}</p></details>
-        <div class="result-nav">
-          <button class="blue" data-go="ask" aria-label="לשאול">🎤</button>
-          <button class="green ${warn ? 'pulse' : ''}" data-go="human" aria-label="עזרה מאדם">🙋</button>
+        ${warn === 'scam' ? `<button class="warn danger" data-say="scam">⚠️ ${esc(L(PHRASES.scam))}</button>` : ''}
+        ${warn === 'review' ? `<button class="warn caution" data-say="review">⚠️ ${esc(L(PHRASES.review))}</button>` : ''}
+        ${warn === 'emergency' ? `<button class="warn danger" data-emergency="mda">🚑 101</button>` : ''}
+        <button class="play primary" data-say-result ${aria(PHRASES.speakerBtn)}>🔊</button>
+        <div class="controls">
+          <button data-say-result ${aria(PHRASES.again)}><span class="icon">🔁</span><span>${esc(L(PHRASES.again))}</span></button>
+          <button data-slower ${aria(PHRASES.slower)}><span class="icon">🐢</span><span>${esc(L(PHRASES.slower))}</span></button>
+          <button data-go="ask" ${aria(PHRASES.question)}><span class="icon">🎤</span><span>${esc(L(PHRASES.question))}</span></button>
         </div>
-      </main>`;
+        <div class="facts">${facts}${missing}</div>
+        <details class="fulltext"><summary>📝 הטקסט בעברית (לבני משפחה)</summary><p>${esc(r.summary_he ?? r.answer_he)}</p></details>
+      </main>
+      ${bar()}`;
   },
 
-  // --- עזרה מאדם ---
-  human() {
-    if (!S.helperPhone) return `${homeBtn}<p class="empty" data-say="noHelper">🙋 ❓<br>${esc(label(PHRASES.noHelper))}</p>`;
-    return `${homeBtn}
+  // --- שאלה על המכתב ---
+  ask() {
+    if (!S.consented) return screens.consent('ask');
+    const about = session.doc?.summary_he
+      ? `<div class="about">📄 ${esc(session.doc.sender || session.doc.event || '')}</div>` : '';
+    return `
+      <main class="center">
+        ${about}
+        <button class="mic" id="mic" ${aria(PHRASES.tapToTalk)}>🎤</button>
+        <div class="guide"><p class="step-text small" id="micText" role="status">${esc(L(PHRASES.tapToTalk))}</p>${speakerBtn('data-say="tapToTalk"')}</div>
+        <div id="micFallback"></div>
+      </main>
+      ${bar()}`;
+  },
+
+  // --- לדבר עם אדם: מתורגמן בין המשתמש (אמהרית) לנותן השירות (עברית) ---
+  talk() {
+    if (!S.consented) return screens.consent('talk');
+    const t = session.talk;
+    const turns = t.turns.map(turnHtml).join('');
+    let panel;
+    if (t.busy) {
+      panel = `<div class="talk-panel" role="status"><div class="spinner small"></div><p>${esc(L(PHRASES.working))}</p></div>`;
+    } else if (t.phase === 'user') {
+      panel = `<div class="talk-panel user">
+        <button class="mic" id="mic" ${aria(PHRASES.yourTurn)}>🎤</button>
+        <p class="step-text small" id="micText" role="status">${esc(L(PHRASES.yourTurn))}</p>
+        <div id="micFallback"></div>
+      </div>`;
+    } else {
+      panel = `<div class="talk-panel provider" lang="he" dir="rtl">
+        <p class="handover" lang="${S.lang}">📱➡️👩‍⚕️ ${esc(PHRASES.giveToProvider.am)}</p>
+        <button class="mic provider" id="mic" aria-label="${esc(PHRASES.giveToProvider.he)}">🎤</button>
+        <p class="step-text small" id="micText" role="status">${esc(PHRASES.giveToProvider.he)}</p>
+        <div id="micFallback"></div>
+      </div>`;
+    }
+    const lastVerify = t.turns.at(-1)?.verify_hint_am;
+    return `
+      <main class="talk">
+        <div class="turns" id="turns" aria-live="polite">${turns || `<p class="talk-hint">${esc(L(PHRASES.talkIntro))}</p>`}</div>
+        ${panel}
+        <div class="controls">
+          <button data-talk-again ${aria(PHRASES.again)} ${t.last.length ? '' : 'disabled'}><span class="icon">🔁</span><span>${esc(L(PHRASES.again))}</span></button>
+          <button data-talk-slower ${aria(PHRASES.slower)} ${t.last.length ? '' : 'disabled'}><span class="icon">🐢</span><span>${esc(L(PHRASES.slower))}</span></button>
+          ${lastVerify ? `<button data-go="doc" aria-label="${esc(lastVerify)}"><span class="icon">📷</span><span>${esc(L(PHRASES.takePhoto))}</span></button>` : ''}
+        </div>
+      </main>
+      ${bar()}`;
+  },
+
+  // --- עזרה מאדם: שמים את השם לפני כל פעולה; שיחה ושיתוף מסמך הן שתי החלטות נפרדות ---
+  human(arg) {
+    if (!S.helperPhone) return helperSetupHtml();
+    const name = esc(S.helperName || S.helperPhone);
+    if (arg === 'share') {
+      return `
+        <main class="center">
+          ${session.photoUrl ? `<img class="thumb" src="${session.photoUrl}" alt="">` : ''}
+          <div class="guide"><p class="step-text small">${esc(L(PHRASES.shareDoc))} ➡️ ${name}</p>${speakerBtn('data-say-share')}</div>
+          <div class="yesno">
+            <button class="no" data-go="human" ${aria(PHRASES.no)}>✖<span>${esc(L(PHRASES.no))}</span></button>
+            <button class="yes" data-share-yes ${aria(PHRASES.yes)}>✔<span>${esc(L(PHRASES.yes))}</span></button>
+          </div>
+        </main>${bar()}`;
+    }
+    return `
       <main class="list">
-        <a class="row green" href="${telHref(S.helperPhone)}" data-helpcall><span class="icon">📞</span>
-          <span class="lbl">${esc(label(PHRASES.call))}</span></a>
-        <button class="row wa" data-helpwa><span class="icon">💬</span>
-          <span class="lbl">${esc(label(PHRASES.whatsapp))}</span>${session.photo ? '<span class="num">📄</span>' : ''}</button>
-      </main>`;
+        <button class="row primary" data-helpcall><span class="icon">📞</span><span class="lbl">${name}</span></button>
+        <button class="row wa" data-helpwa><span class="icon">💬</span><span class="lbl">WhatsApp · ${name}</span></button>
+        ${session.photo ? `<button class="row secondary" data-go="human" data-arg="share"><span class="icon">📄➡️</span><span class="lbl">${esc(L(PHRASES.shareDoc))}</span></button>` : ''}
+        <button class="row danger" data-emergency="mda"><span class="icon">🚑</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
+      </main>
+      ${bar({ help: false })}`;
   },
 
   family() {
-    if (!S.contacts.length) return `${homeBtn}<p class="empty" data-say="noFamily">👨‍👩‍👧 ❓<br>${esc(label(PHRASES.noFamily))}</p>`;
-    return `${homeBtn}
+    if (!S.contacts.length) return contactSetupHtml();
+    return `
       <main class="people">
         ${S.contacts.map(c => `
           <div class="person">
-            <button class="face" data-call="${c.id}">
+            <button class="face" data-call="${c.id}" aria-label="${esc(c.name)}">
               <img data-photo="photo:${c.id}" alt="" hidden><span class="initial">${esc(c.name.slice(0, 1))}</span>
               <span class="name">${esc(c.name)}</span>
             </button>
             <div class="actions">
-              <button class="act green" data-call="${c.id}" aria-label="${esc(label(PHRASES.call))}">📞</button>
+              <button class="act primary" data-call="${c.id}" ${aria(PHRASES.call)}>📞</button>
               <button class="act wa" data-wa="${c.id}" aria-label="WhatsApp">💬</button>
             </div>
           </div>`).join('')}
-      </main>`;
+      </main>
+      ${bar()}`;
   },
 
   emergency() {
-    return `${homeBtn}
+    return `
       <main class="list">
         ${EMERGENCY.map(e => `
-          <button class="row red" data-emergency="${e.key}">
+          <button class="row danger" data-emergency="${e.key}" ${aria(e)}>
             <span class="icon">${e.icon}</span>
-            <span class="lbl">${esc(label(e))}<small>${esc(sub(e))}</small></span>
+            <span class="lbl">${esc(L(e))}<small>${esc(sub(e))}</small></span>
             <span class="num">${e.number}</span>
           </button>`).join('')}
-        ${S.contacts[0] ? `
-          <button class="row green" data-call="${S.contacts[0].id}">
-            <span class="icon"><img data-photo="photo:${S.contacts[0].id}" alt="" hidden><span>👤</span></span>
-            <span class="lbl">${esc(S.contacts[0].name)}</span><span class="num">📞</span>
-          </button>` : ''}
-      </main>`;
+      </main>
+      ${bar()}`;
   },
 
   meds() {
-    if (!S.meds.length) return `${homeBtn}<p class="empty" data-say="noMeds">💊 ❓<br>${esc(label(PHRASES.noMeds))}</p>`;
-    return `${homeBtn}
+    if (!S.meds.length) {
+      return `<main class="center"><div class="step-icon">💊</div>
+        <div class="guide"><p class="step-text small">${esc(L(PHRASES.noMeds))}</p>${speakerBtn('data-say="noMeds"')}</div>
+        <button class="wide secondary" data-go="setup">⚙️ ${esc(PHRASES.noMeds.he)} – להוספה (לבני משפחה)</button>
+      </main>${bar()}`;
+    }
+    return `
       <main class="list">
         ${TIMES.map(t => {
           const list = S.meds.filter(m => m.times.includes(t.key));
           if (!list.length) return '';
           return `<section class="time ${nowTime() === t.key ? 'now' : ''}">
-            <button class="time-head" data-time="${t.key}"><span class="icon">${t.icon}</span>${esc(label(t))}</button>
+            <button class="time-head" data-time="${t.key}" ${aria(t)}><span class="icon">${t.icon}</span>${esc(L(t))}</button>
             <div class="pills">
               ${list.map(m => `
-                <button class="pill" data-med="${m.id}">
+                <button class="pill" data-med="${m.id}" aria-label="${esc(m.name)}">
                   <img data-photo="photo:${m.id}" alt="" hidden><span class="icon">💊</span>
                   <span class="name">${esc(m.name)}</span>
                 </button>`).join('')}
             </div>
           </section>`;
         }).join('')}
-      </main>`;
+      </main>
+      ${bar()}`;
   },
 
   learn() {
-    return `${homeBtn}
+    return `
       <main class="grid">
         ${LESSONS.map(l => `
-          <button class="tile purple" data-lesson="${l.key}">
+          <button class="tile" data-lesson="${l.key}" ${aria(l)}>
             <span class="icon">${l.icon}</span>
-            <span class="lbl">${esc(label(l))}</span>
+            <span class="lbl">${esc(L(l))}</span>
             <span class="sub">${esc(sub(l))}</span>
           </button>`).join('')}
-      </main>`;
+      </main>
+      ${bar()}`;
   },
 
   lesson(arg) {
@@ -236,36 +351,73 @@ const screens = {
     if (!l) return screens.learn();
     const i = Math.min(+n, l.steps.length);
     if (i === l.steps.length) {
-      return `${homeBtn}<main class="center"><div class="step-icon">🎉</div>
-        <p class="step-text">${esc(label(PHRASES.done))}</p>
-        <button class="next green" data-go="learn">✔</button></main>`;
+      return `<main class="center"><div class="step-icon">🎉</div>
+        <p class="step-text">${esc(L(PHRASES.done))}</p>
+        <button class="big-action primary" data-go="learn" ${aria(PHRASES.yes)}>✔</button></main>${bar()}`;
     }
     const st = l.steps[i];
-    return `${homeBtn}
+    return `
       <main class="center lesson">
         <div class="dots">${l.steps.map((_, j) => `<span class="${j <= i ? 'on' : ''}"></span>`).join('')}</div>
         <div class="step-icon">${st.icon}</div>
-        <p class="step-text">${esc(label(st))}</p>
-        <div class="step-nav">
-          <button class="again" data-again aria-label="שוב">🔁</button>
-          <button class="next green" data-go="lesson" data-arg="${l.key}-${i + 1}" aria-label="הבא">▶</button>
+        <p class="step-text">${esc(L(st))}</p>
+        <div class="yesno">
+          <button class="no" data-again ${aria(PHRASES.again)}>🔁</button>
+          <button class="yes" data-go="lesson" data-arg="${l.key}-${i + 1}" aria-label="▶">▶</button>
         </div>
-      </main>`;
+      </main>
+      ${bar()}`;
   },
 
   setup: () => settingsHtml(),
 };
 
-function consentHtml(next) {
-  return `${homeBtn}
+// כשאין עוזר: לא מבוי סתום – הגדרה מודרכת עם מי שנמצא ליד (בעברית, בשבילו)
+function helperSetupHtml() {
+  return `
     <main class="center">
-      <div class="step-icon">🔒</div>
-      <p class="step-text small">${esc(label(PHRASES.consent))}</p>
-      <div class="step-nav">
-        <button class="again red" data-go="home" aria-label="לא">✖</button>
-        <button class="next green" data-consent="${next}" aria-label="כן">✔</button>
-      </div>
-    </main>`;
+      <div class="step-icon">🙋👥</div>
+      <div class="guide"><p class="step-text small">${esc(L(PHRASES.helpSetup))}</p>${speakerBtn('data-say="helpSetup"')}</div>
+      <form class="quick-setup" id="helperForm" lang="he" dir="rtl">
+        <p class="hint">למי שעומד ליד: מי יעזור כשצריך? (בן/בת משפחה או מתנדב/ת)</p>
+        <input id="qsName" name="name" placeholder="שם, למשל: דויד (הבן)" required>
+        <input id="qsPhone" name="phone" type="tel" placeholder="טלפון 05X-XXXXXXX" required dir="ltr">
+        <button class="wide primary">✔ שמירה</button>
+      </form>
+      <button class="row danger" data-emergency="mda"><span class="icon">🚑</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
+    </main>
+    ${bar({ help: false })}`;
+}
+
+function contactSetupHtml() {
+  return `
+    <main class="center">
+      <div class="step-icon">👨‍👩‍👧➕</div>
+      <div class="guide"><p class="step-text small">${esc(L(PHRASES.noFamily))}</p>${speakerBtn('data-say="noFamily"')}</div>
+      <form class="quick-setup" id="familyForm" lang="he" dir="rtl">
+        <p class="hint">למי שעומד ליד: הוסיפו בן משפחה. התמונה היא מה שיזהו.</p>
+        <input id="qfName" name="name" placeholder="שם" required>
+        <input id="qfPhone" name="phone" type="tel" placeholder="טלפון 05X-XXXXXXX" required dir="ltr">
+        <label class="wide secondary file">📷 תמונה<input id="qfPhoto" name="photo" type="file" accept="image/*" hidden></label>
+        <button class="wide primary">✔ שמירה</button>
+      </form>
+    </main>
+    ${bar()}`;
+}
+
+function turnHtml(t) {
+  const fromUser = t.speaker === 'user';
+  const main = `<div class="bubble ${fromUser ? 'from-user' : 'from-provider'}">
+      <span class="who">${fromUser ? '🧓' : '👩‍⚕️'}</span>
+      <div><p class="said" lang="${fromUser ? 'am' : 'he'}">${esc(t.original)}</p>
+      <p class="translated" lang="${fromUser ? 'he' : 'am'}" dir="${fromUser ? 'rtl' : 'ltr'}">${esc(t.translation)}</p></div>
+    </div>`;
+  const notes = [
+    t.needs_clarification && t.clarify_question ? `<div class="bubble assistant">❓ ${esc(t.clarify_question)}</div>` : '',
+    t.sensitive && t.sensitive_note_am ? `<div class="bubble assistant warn">⚠️ ${esc(t.sensitive_note_am)}</div>` : '',
+    t.verify_hint_am ? `<div class="bubble assistant">📷 ${esc(t.verify_hint_am)}</div>` : '',
+  ].join('');
+  return main + notes;
 }
 
 const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
@@ -280,119 +432,230 @@ function nowTime() {
   return h < 11 ? 'morning' : h < 16 ? 'noon' : h < 21 ? 'evening' : 'night';
 }
 
-// מה להשמיע אוטומטית כשנכנסים למסך
+// מה להשמיע כשנכנסים למסך
 function autoSay(screen, arg) {
-  if ((screen === 'doc' || screen === 'ask') && !S.consented) return sayPhrase('consent');
-  if (screen === 'ask') return sayPhrase('tapToTalk');
+  if (screen === 'doc') return sayPhrase('docGuide');
+  if (screen === 'consent' || ((screen === 'ask' || screen === 'talk') && !S.consented)) return sayPhrase('consent');
   if (screen === 'working') return sayPhrase('working');
-  if (screen === 'result') return playResult();
-  const t = TILES.find(x => x.key === screen);
-  if (t) return say(t.key, sayText(t), S.lang);
+  if (screen === 'ask') return sayPhrase('tapToTalk');
+  if (screen === 'talk' && !session.talk.turns.length) return sayPhrase('talkIntro');
+  if (screen === 'result') return sayResultScreen();
+  if (screen === 'human' && !S.helperPhone) return sayPhrase('helpSetup');
+  if (screen === 'human' && arg === 'share') return sayShare();
+  if (screen === 'family' && !S.contacts.length) return sayPhrase('noFamily');
+  if (screen === 'meds' && !S.meds.length) return sayPhrase('noMeds');
   if (screen === 'lesson') {
     const [key, n = '0'] = (arg || '').split('-');
     const l = LESSONS.find(x => x.key === key);
     if (!l) return;
     const st = l.steps[+n];
-    return st ? say(`lesson-${l.key}-${+n + 1}`, st, S.lang) : sayPhrase('done');
+    return st ? say(`lesson-${l.key}-${+n + 1}`, st, S.lang, () => S.lang === 'am' && speakFixedAm(st.am)) : sayPhrase('done');
   }
-  const empty = app.querySelector('[data-say]');
-  if (empty) sayPhrase(empty.dataset.say);
+  const t = TILES.find(x => x.key === screen);
+  if (t) return sayTile(t);
+}
+
+async function sayResultScreen() {
+  const r = session.result;
+  if (r && 'readable' in r && !r.readable) {
+    await sayPhrase(PHRASES['hint_' + r.retake_hint] ? 'hint_' + r.retake_hint : 'hint_blurry');
+    if (session.fails >= 2) await sayPhrase('stillStuck');
+    return;
+  }
+  if (r?.understood === false) return sayPhrase('notHeard');
+  return playResult();
+}
+
+function sayShare() {
+  const name = S.helperName || '';
+  return say('share', { am: PHRASES.shareDoc.am + ' ' + name, he: PHRASES.shareDoc.he + ' ' + name }, S.lang);
 }
 
 function render() {
   const [screen, arg] = route();
-  if (screen !== 'ask' && session.recorder) { session.recorder.stop(); session.recorder = null; }
+  if (screen !== 'ask' && screen !== 'talk' && session.recorder) { session.recorder.stop(); session.recorder = null; }
+  stop(); stopSpeaking();
   const fn = screens[screen] || screens.home;
   app.innerHTML = fn(arg);
   document.documentElement.lang = screen === 'setup' ? 'he' : S.lang;
   document.documentElement.dir = screen === 'setup' || S.lang === 'he' ? 'rtl' : 'ltr';
   fillPhotos();
-  if (screen === 'setup') bindSettings();
-  else if (screen === 'home') { stop(); stopSpeaking(); bindGear(); }
+  if (screen === 'setup') return bindSettings();
+  if (screen === 'home') bindGear();
   else autoSay(screen, arg);
   if (screen === 'doc') bindDoc();
-  if (screen === 'ask') bindAsk();
-  window.scrollTo(0, 0);
+  if (screen === 'ask') bindMic('ask');
+  if (screen === 'talk' && !session.talk.busy) bindMic('talk');
+  if (screen === 'human' || screen === 'family') bindQuickSetup();
+  if (screen === 'talk') document.getElementById('turns')?.lastElementChild?.scrollIntoView({ block: 'end' });
+  else window.scrollTo(0, 0);
 }
 
-// ---------- צילום → הסבר ----------
+// ---------- מכתב: צילום → (הסכמה) → הבנה ----------
 function bindDoc() {
-  const input = document.getElementById('docPhoto');
-  if (!input) return;
-  input.addEventListener('change', async () => {
-    const file = input.files[0];
-    if (!file) return;
-    session.photo = await resizeImage(file, 1600); // מספיק חד כדי לקרוא עברית, קטן מספיק לרשת חלשה
-    go('working');
-    try {
-      const r = await explainPhoto(session.photo);
-      session.doc = r.readable ? r : null;
-      setResult(r);
-      go('result');
-    } catch {
-      app.innerHTML = errorHtml(); sayPhrase('error');
-    }
-  });
+  for (const input of [document.getElementById('camInput'), document.getElementById('fileInput')]) {
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      session.photo = await resizeImage(file, 1600); // חד מספיק לקריאת עברית, קטן מספיק לרשת חלשה
+      if (session.photoUrl) URL.revokeObjectURL(session.photoUrl);
+      session.photoUrl = URL.createObjectURL(session.photo);
+      if (!S.consented) return go('consent', 'send');
+      sendPhoto();
+    });
+  }
 }
 
-// ---------- שאלה קולית: לגעת → לדבר → לגעת שוב ----------
-async function bindAsk() {
+async function sendPhoto() {
+  go('working');
+  try {
+    const r = await explainPhoto(session.photo);
+    if (r.readable) { session.fails = 0; session.doc = r; } else session.fails++;
+    session.result = r;
+    go('result');
+  } catch {
+    showError();
+  }
+}
+
+function showError() {
+  app.innerHTML = `<main class="center"><div class="step-icon">😕</div>
+    <div class="guide"><p class="step-text small">${esc(L(PHRASES.error))}</p>${speakerBtn('data-say="error"')}</div>
+    <div class="yesno">
+      <button class="no" data-go="doc" ${aria(PHRASES.again)}>🔁<span>${esc(L(PHRASES.again))}</span></button>
+      <button class="yes" data-go="human" ${aria(HELP)}>🙋<span>${esc(L(HELP))}</span></button>
+    </div></main>${bar()}`;
+  sayPhrase('error');
+}
+
+// ---------- מיקרופון: לגעת → לדבר → נעצר לבד כשמפסיקים (או לגעת שוב) ----------
+async function bindMic(mode) {
   const mic = document.getElementById('mic');
   if (!mic) return;
-  if ((await backend()).kind === 'claude') return bindTypedAsk(mic);
-  mic.addEventListener('click', async () => {
-    if (!session.recorder) {
-      stop();
-      try { session.recorder = await startWavRecording(); } catch { document.getElementById('micText').textContent = '🎤 ❌'; return; }
-      mic.classList.add('on'); mic.textContent = '⏹';
-      return;
-    }
-    const { blob, seconds } = await session.recorder.stop();
+  const b = await backend();
+  if (b.typed || session.typed) return showTyped(mode, mic);
+
+  const finish = async () => {
+    if (!session.recorder) return;
+    const rec = session.recorder;
     session.recorder = null;
-    if (seconds < 1) { render(); return; }
-    go('working');
+    const { blob, seconds } = await rec.stop();
+    if (seconds < 0.8) return render();
+    submit(mode, blob);
+  };
+  mic.addEventListener('click', async () => {
+    if (session.recorder) return finish();
+    await stopSpeaking(); stop();
     try {
-      setResult(await ask(blob, session.doc));
-      go('result');
+      session.recorder = await startWavRecording({ onSilence: finish });
     } catch {
-      app.innerHTML = errorHtml(); sayPhrase('error');
+      return showMicFailure(mode, mic);
     }
+    mic.classList.add('on'); mic.textContent = '⏹';
+    const isProvider = mode === 'talk' && session.talk.phase === 'provider';
+    document.getElementById('micText').textContent = isProvider ? 'אני מקשיב. דברו.' : L(PHRASES.listening);
   });
 }
 
-// בדף ההדגמה ב-Claude אין מיקרופון – מקלידים את השאלה (באמהרית או בעברית)
-function bindTypedAsk(mic) {
+// המיקרופון לא עבד: מסבירים, ונותנים שלוש דרכים להמשיך
+function showMicFailure(mode, mic) {
+  mic.classList.add('failed');
+  const isProvider = mode === 'talk' && session.talk.phase === 'provider';
+  document.getElementById('micText').textContent = isProvider ? 'המיקרופון לא עבד. נסו שוב או הקלידו.' : L(PHRASES.micFail);
+  document.getElementById('micFallback').innerHTML = `
+    <div class="controls">
+      <button data-mic-retry ${aria(PHRASES.again)}><span class="icon">🔁</span><span>${esc(L(PHRASES.again))}</span></button>
+      <button data-type-instead ${aria(PHRASES.typeIt)}><span class="icon">⌨️</span><span>${esc(L(PHRASES.typeIt))}</span></button>
+      <button data-go="human" ${aria(HELP)}><span class="icon">🙋</span><span>${esc(L(HELP))}</span></button>
+    </div>`;
+  if (!isProvider) sayPhrase('micFail');
+}
+
+// הקלדה במקום דיבור (בדף ההדגמה, או כשאין מיקרופון)
+function showTyped(mode, mic) {
   mic.hidden = true;
-  const box = document.createElement('form');
-  box.className = 'typed-ask';
-  box.innerHTML = `<p class="demo">🧪 בהדגמה אין מיקרופון – הקלידו את השאלה. באתר האמיתי מדברים.</p>
-    <textarea id="typedQ" rows="3" placeholder="למשל: מתי צריך לשלם?"></textarea>
-    <button class="next blue" aria-label="שליחה">➤</button>`;
-  mic.after(box);
-  box.onsubmit = async e => {
+  const isProvider = mode === 'talk' && session.talk.phase === 'provider';
+  const form = document.createElement('form');
+  form.className = 'typed-ask';
+  form.innerHTML = `
+    <p class="demo">⌨️ כאן מקלידים. באתר האמיתי מדברים.</p>
+    <textarea id="typedQ" rows="3" lang="${isProvider ? 'he' : S.lang}" dir="auto"
+      placeholder="${isProvider ? 'כתבו כאן בעברית…' : esc(L(PHRASES.typeIt)) + '…'}"></textarea>
+    <button class="wide primary" aria-label="➤">➤</button>`;
+  mic.after(form);
+  form.onsubmit = e => {
     e.preventDefault();
-    const q = box.querySelector('textarea').value.trim();
-    if (!q) return;
-    go('working');
-    try { setResult(await ask(q, session.doc)); go('result'); }
-    catch { app.innerHTML = errorHtml(); sayPhrase('error'); }
+    const q = form.querySelector('textarea').value.trim();
+    if (q) submit(mode, q);
   };
 }
 
-function errorHtml() {
-  return `${homeBtn}<main class="center"><div class="step-icon">😕</div>
-    <p class="step-text small">${esc(label(PHRASES.error))}</p>
-    <div class="step-nav"><button class="again" data-go="human">🙋</button>
-    <button class="next yellow" data-go="doc">📷</button></div></main>`;
+async function submit(mode, input) {
+  if (mode === 'ask') {
+    go('working');
+    try { session.result = await ask(input, session.doc); go('result'); } catch { showError(); }
+    return;
+  }
+  // מתורגמן
+  const t = session.talk;
+  const speaker = t.phase;
+  t.busy = true; render();
+  let r;
+  try { r = await translate(input, speaker, t.turns); } catch { t.busy = false; render(); return showError(); }
+  t.busy = false;
+  if (!r.heard_ok) {
+    render();
+    return speaker === 'user' ? sayPhrase('notHeard') : speak({ text: 'לא שמעתי. אפשר לחזור, לאט וקרוב לטלפון?', lang: 'he' });
+  }
+  t.turns.push(r);
+  const [own, other] = speaker === 'user' ? ['am', 'he'] : ['he', 'am'];
+  const sp = r.speak || {};
+  const items = [{ text: r.translation, lang: other, signed: sp.translation }];
+  if (r.needs_clarification && r.clarify_question) items.push({ text: r.clarify_question, lang: own, signed: sp.clarify });
+  if (r.sensitive && r.sensitive_note_am) items.push({ text: r.sensitive_note_am, lang: 'am', signed: sp.sensitive });
+  if (r.verify_hint_am) items.push({ text: r.verify_hint_am, lang: 'am', signed: sp.verify });
+  if (!r.needs_clarification) t.phase = speaker === 'user' ? 'provider' : 'user';
+  if (t.phase === 'provider' && !t.introduced) {
+    t.introduced = true;
+    items.push({ text: PHRASES.providerIntro.he, lang: 'he' });
+  }
+  t.last = items;
+  render();
+  playItems(items);
 }
 
-// ---------- עזרה מאדם: שולח את התמונה וההסבר לעוזר בוואטסאפ ----------
-async function sendToHelper() {
-  const r = session.result;
-  const text = ['שלום, אני צריך/ה עזרה 🙏', r?.summary_he || r?.answer_he ? `מה המערכת הבינה: ${r.summary_he ?? r.answer_he}` : '']
-    .filter(Boolean).join('\n');
+async function playItems(items, rate = 1) {
+  for (const it of items) {
+    const ok = await speak(it, { rate });
+    if (!ok && it.lang === 'am') continue; // אין קול אמהרי במכשיר – הטקסט מוצג על המסך
+  }
+}
+
+// ---------- עזרה מאדם ----------
+function bindQuickSetup() {
+  const hf = document.getElementById('helperForm');
+  if (hf) hf.onsubmit = e => {
+    e.preventDefault();
+    S.helperName = hf.name.value.trim();
+    S.helperPhone = hf.phone.value.trim();
+    saveSettings(S); render();
+  };
+  const ff = document.getElementById('familyForm');
+  if (ff) ff.onsubmit = async e => {
+    e.preventDefault();
+    const id = newId();
+    const f = ff.querySelector('#qfPhoto').files[0];
+    if (f) await putBlob('photo:' + id, await resizeImage(f));
+    S.contacts.push({ id, name: ff.name.value.trim(), phone: ff.phone.value.trim() });
+    saveSettings(S); render();
+  };
+}
+
+async function shareDocWithHelper() {
+  const r = session.doc;
+  const text = ['שלום, אני צריך/ה עזרה עם המכתב הזה 🙏', r?.summary_he ? `מה המערכת הבינה: ${r.summary_he}` : ''].filter(Boolean).join('\n');
   if (session.photo) {
-    const f = new File([session.photo], 'document.jpg', { type: 'image/jpeg' });
+    const f = new File([session.photo], 'letter.jpg', { type: 'image/jpeg' });
     if (navigator.canShare?.({ files: [f] })) {
       try { await navigator.share({ files: [f], text }); return sayPhrase('sent'); } catch { return; }
     }
@@ -401,30 +664,50 @@ async function sendToHelper() {
 }
 
 // ---------- לחיצות ----------
-app.addEventListener('click', e => {
-  const b = e.target.closest('button, [data-say], a');
-  if (!b) return;
+app.addEventListener('click', async e => {
+  const b = e.target.closest('button, [data-say]');
+  if (!b || b.disabled) return;
   const d = b.dataset;
   const contact = id => S.contacts.find(c => c.id === id);
+  const nameSay = name => ({ am: name, he: name });
 
   if (d.go) return go(d.go, d.arg);
   if (d.tile) return go(d.tile); // המסך עצמו משמיע את השם
-  if (d.consent) { S.consented = true; saveSettings(S); return render(); }
-  if (d.play !== undefined) return playResult();
-  if (d.helpwa !== undefined) return sendToHelper();
+  if (d.intro !== undefined) return sayPhrase('homeIntro');
+  if (d.pick) return document.getElementById(d.pick === 'camera' ? 'camInput' : 'fileInput').click();
+  if (d.consentYes) {
+    S.consented = true; saveSettings(S);
+    if (d.consentYes === 'send') return sendPhoto();
+    return route()[0] === d.consentYes ? render() : go(d.consentYes);
+  }
+  if (d.consentNo) { session.photo = null; return go('home'); }
+  if (d.sayResult !== undefined) return sayResultScreen();
+  if (d.slower !== undefined) return playResult(0.75);
+  if (d.talkAgain !== undefined) return playItems(session.talk.last);
+  if (d.talkSlower !== undefined) return playItems(session.talk.last, 0.75);
+  if (d.sayShare !== undefined) return sayShare();
+  if (d.micRetry !== undefined) return render();
+  if (d.typeInstead !== undefined) { session.typed = true; return render(); }
+  if (d.helpcall !== undefined) {
+    return sayThen('helper', nameSay(S.helperName || ''), S.lang, () => (location.href = telHref(S.helperPhone)));
+  }
+  if (d.helpwa !== undefined) {
+    return sayThen('helper', nameSay(S.helperName || ''), S.lang, () => (location.href = waHref(S.helperPhone)));
+  }
+  if (d.shareYes !== undefined) return shareDocWithHelper();
   if (d.call) {
     const c = contact(d.call);
-    return sayThen('contact:' + c.id, { he: c.name, am: c.name }, S.lang, () => (location.href = telHref(c.phone)));
+    return sayThen('contact:' + c.id, nameSay(c.name), S.lang, () => (location.href = telHref(c.phone)));
   }
   if (d.wa) {
     const c = contact(d.wa);
-    return sayThen('contact:' + c.id, { he: c.name, am: c.name }, S.lang, () => (location.href = waHref(c.phone)));
+    return sayThen('contact:' + c.id, nameSay(c.name), S.lang, () => (location.href = waHref(c.phone)));
   }
   if (d.emergency) {
     const em = EMERGENCY.find(x => x.key === d.emergency);
     return sayThen(em.key, sayText(em), S.lang, () => (location.href = telHref(em.number)));
   }
-  if (d.med) { const m = S.meds.find(x => x.id === d.med); return say('med:' + m.id, { he: m.name, am: m.name }, S.lang); }
+  if (d.med) { const m = S.meds.find(x => x.id === d.med); return say('med:' + m.id, nameSay(m.name), S.lang); }
   if (d.time) { const t = TIMES.find(x => x.key === d.time); return say('time-' + t.key, t, S.lang); }
   if (d.lesson) return go('lesson', d.lesson + '-0');
   if (d.again !== undefined) return autoSay('lesson', route()[1]);
@@ -463,21 +746,22 @@ function settingsHtml() {
 
     <section>
       <h2>מי עוזר? (כפתור 🙋)</h2>
-      <p class="hint">מספר הוואטסאפ של בן/בת משפחה, מתנדב/ת, או של בוט ה"גשר" למתנדבים. לשם יישלחו מסמכים כשצריך עזרה מאדם.</p>
+      <p class="hint">בן/בת משפחה, מתנדב/ת, או בוט ה"גשר" למתנדבים. השם נאמר בקול לפני שמתקשרים.</p>
+      <input id="helperName" value="${esc(S.helperName)}" placeholder="שם, למשל: דויד (הבן)">
       <input id="helper" type="tel" value="${esc(S.helperPhone)}" placeholder="05X-XXXXXXX" dir="ltr">
     </section>
 
     <section>
       <h2>פרטיות</h2>
-      <p class="hint">${S.consented ? '✅ ההורה אישר/ה שליחת תמונות והקלטות לעיבוד.' : 'עדיין לא ניתן אישור לשליחת תמונות והקלטות.'}
-      תמונות והקלטות נשלחות לשירות AI כדי לקרוא ולהבין אותן ולא נשמרות בשרת שלנו.
-      בשכבה החינמית של Google ייתכן שהמידע ישמש את Google לשיפור השירות – לכן בתקופת הניסוי כדאי להשתמש במסמכים לא רגישים.</p>
+      <p class="hint">${S.consented ? '✅ ניתן אישור לשלוח תמונות והקלטות לעיבוד.' : 'עדיין לא ניתן אישור לשלוח תמונות והקלטות.'}
+      תמונות והקלטות נשלחות לשירות AI כדי לקרוא ולהבין אותן. האתר שלנו לא שומר אותן.
+      שימו לב: בשכבה החינמית של Google ייתכן שהתוכן ישמש את Google לשיפור השירות. לכן בתקופת הניסוי עדיף מסמכים לא רגישים.</p>
       ${S.consented ? '<button type="button" class="mini" id="revoke">ביטול האישור</button>' : ''}
     </section>
 
     <section>
       <h2>אנשי קשר</h2>
-      <p class="hint">התמונה היא מה שההורה יזהה. כדאי להקליט את השם בקול שלכם, למשל: "זה דויד, הבן שלך".</p>
+      <p class="hint">התמונה היא מה שיזהו. כדאי להקליט את השם בקול שלכם, למשל: "זה דויד, הבן שלך".</p>
       ${S.contacts.map(c => `
         <div class="item">
           <img data-photo="photo:${c.id}" alt="" hidden><span class="ph">👤</span>
@@ -486,16 +770,16 @@ function settingsHtml() {
           <button type="button" class="mini danger" data-del-contact="${c.id}">🗑</button>
         </div>`).join('')}
       <form id="addContact" class="add">
-        <input name="name" placeholder="שם" required>
-        <input name="phone" type="tel" placeholder="טלפון 05X-XXXXXXX" required dir="ltr">
-        <label class="file">📷 תמונה<input name="photo" type="file" accept="image/*" hidden></label>
+        <input id="cName" name="name" placeholder="שם" required>
+        <input id="cPhone" name="phone" type="tel" placeholder="טלפון 05X-XXXXXXX" required dir="ltr">
+        <label class="file">📷 תמונה<input id="cPhoto" name="photo" type="file" accept="image/*" hidden></label>
         <button>➕ הוספה</button>
       </form>
     </section>
 
     <section>
       <h2>תרופות</h2>
-      <p class="hint">צלמו את קופסת התרופה – ככה מזהים אותה בלי לקרוא.</p>
+      <p class="hint">צלמו את קופסת התרופה – כך מזהים אותה בלי לקרוא.</p>
       ${S.meds.map(m => `
         <div class="item">
           <img data-photo="photo:${m.id}" alt="" hidden><span class="ph">💊</span>
@@ -504,20 +788,24 @@ function settingsHtml() {
           <button type="button" class="mini danger" data-del-med="${m.id}">🗑</button>
         </div>`).join('')}
       <form id="addMed" class="add">
-        <input name="name" placeholder="שם התרופה / למה היא" required>
+        <input id="mName" name="name" placeholder="שם התרופה / למה היא" required>
         <div class="times">${TIMES.map(t => `<label><input type="checkbox" name="t" value="${t.key}"> ${t.icon} ${t.he}</label>`).join('')}</div>
-        <label class="file">📷 תמונה<input name="photo" type="file" accept="image/*" hidden></label>
+        <label class="file">📷 תמונה<input id="mPhoto" name="photo" type="file" accept="image/*" hidden></label>
         <button>➕ הוספה</button>
       </form>
     </section>
 
     <section>
-      <h2>הקלטת הכפתורים בקול שלכם</h2>
-      <p class="hint">אם המכשיר לא יודע להקריא אמהרית – הקליטו כאן כל כפתור. ההקלטה נשמרת רק בטלפון הזה.</p>
+      <h2>הקלטת ההנחיות בקול שלכם</h2>
+      <p class="hint">קול מוכר באמהרית הכי ברור. כל הקלטה נשמרת רק בטלפון הזה.</p>
       ${[...TILES, ...EMERGENCY].map(t => `
         <div class="item"><span class="ph">${t.icon}</span>
           <div class="grow"><b>${t.he}</b><br><small>להגיד: ${esc(t.sayAm ?? t.am)}</small></div>
           ${recBtns(t.key)}</div>`).join('')}
+      ${['homeIntro', 'docGuide', 'consent', 'talkIntro', 'helpSetup'].map(k => `
+        <div class="item"><span class="ph">🗣️</span>
+          <div class="grow"><b>${esc(PHRASES[k].he)}</b><br><small>להגיד: ${esc(PHRASES[k].am)}</small></div>
+          ${recBtns(k)}</div>`).join('')}
     </section>
 
     <p class="hint" id="backendState"></p>
@@ -528,13 +816,17 @@ function bindSettings() {
   const persist = () => saveSettings(S);
   document.getElementById('lang').onchange = e => { S.lang = e.target.value; persist(); };
   document.getElementById('helper').onchange = e => { S.helperPhone = e.target.value.trim(); persist(); };
-  backend().then(b => { document.getElementById('backendState').textContent =
-    { server: '🟢 מחובר לשרת', claude: '🤖 דף הדגמה ב-Claude – Claude קורא את המסמכים', demo: '🧪 מצב הדגמה – תשובות לדוגמה (השרת עוד לא מחובר)' }[b.kind]; });
+  document.getElementById('helperName').onchange = e => { S.helperName = e.target.value.trim(); persist(); };
+  backend().then(b => {
+    document.getElementById('backendState').textContent = {
+      server: '🟢 מחובר לשרת', claude: '🤖 דף הדגמה ב-Claude – Claude קורא ומתרגם', demo: '🧪 מצב הדגמה – תשובות לדוגמה (השרת עוד לא מחובר)',
+    }[b.kind];
+  });
   const revoke = document.getElementById('revoke');
   if (revoke) revoke.onclick = () => { S.consented = false; persist(); render(); };
 
   const savePhoto = async (form, id) => {
-    const f = form.photo.files[0];
+    const f = form.querySelector('input[type=file]').files[0];
     if (f) await putBlob('photo:' + id, await resizeImage(f));
   };
 

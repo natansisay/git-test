@@ -28,14 +28,17 @@ function findVoice(prefix) {
   return speechSynthesis.getVoices().find(v => v.lang.toLowerCase().startsWith(prefix));
 }
 
-function tts(text, langCode) {
+export const hasBrowserVoice = lang => Boolean(findVoice(lang));
+
+export function tts(text, langCode, rate = 0.85) {
+  stop();
   return new Promise(resolve => {
     if (!('speechSynthesis' in window) || !text) return resolve(false);
     const u = new SpeechSynthesisUtterance(text);
     const v = findVoice(langCode);
     if (v) u.voice = v;
     u.lang = langCode === 'am' ? 'am-ET' : 'he-IL';
-    u.rate = 0.85; // לאט וברור
+    u.rate = rate; // לאט וברור
     u.onend = () => resolve(true);
     u.onerror = () => resolve(false);
     speechSynthesis.speak(u);
@@ -48,7 +51,7 @@ function tts(text, langCode) {
  * @param {{am?: string, he?: string}} text  טקסט לגיבוי
  * @param {string} lang  'am' | 'he'
  */
-export async function say(key, text = {}, lang = 'am') {
+export async function say(key, text = {}, lang = 'am', extra) {
   stop();
   // 1. הקלטה אישית
   const rec = await getBlob('voice:' + key);
@@ -60,6 +63,8 @@ export async function say(key, text = {}, lang = 'am') {
   if (!key.includes(':')) {
     try { return await playUrl(`audio/${lang}/${key}.mp3`); } catch { /* אין קובץ */ }
   }
+  // 2.5 קול טבעי מבחוץ (למשל הקראה של Claude בדף ההדגמה)
+  if (extra && await extra()) return true;
   // 3. הקראה: אמהרית אם יש קול כזה במכשיר, אחרת עברית
   if (lang === 'am' && findVoice('am') && text.am) return tts(text.am, 'am');
   return tts(text.he || text.am, 'he');

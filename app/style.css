@@ -1,202 +1,268 @@
-/* עיצוב למבוגרים: כפתורים ענקיים, צבע + אייקון לכל פעולה, ניגודיות גבוהה, בלי תפריטים נסתרים */
+/* עיצוב למבוגרים: כפתורים גדולים, צבע מוביל אחד לפעולה הראשית, אדום רק לחירום ולסכנה,
+   הנחיה אחת בכל פעם, ופס "בית / עזרה מאדם" תמיד באותו מקום למטה. */
 :root {
-  --bg: #fdf8ef; --ink: #1d1d1b; --card: #ffffff;
-  --green: #1f7a4d; --red: #b8322a; --blue: #1f5fa8; --yellow: #e0a400; --purple: #6b3fa0; --wa: #25d366;
-  --r: 28px;
+  color-scheme: light;
+  --bg: #f7f4ee;          /* רקע חם ובהיר */
+  --card: #ffffff;
+  --ink: #1d1d1b;
+  --muted: #625d53;
+  --line: #e4ddd0;
+  --accent: #1d6b48;      /* הצבע המוביל – הפעולה הראשית */
+  --accent-ink: #ffffff;
+  --accent-soft: #e3efe8;
+  --danger: #b3261e;      /* חירום / סכנה בלבד */
+  --caution: #f2c14e;     /* "כדאי לבדוק עם אדם" */
+  --wa: #1fa855;
+  --listen: #c2410c;      /* מקליט עכשיו */
+  --r: 26px;
+  --bar-h: 92px;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); }
 body {
   font-family: "Noto Sans Ethiopic", "Abyssinica SIL", "Nyala", system-ui, sans-serif;
   font-size: 22px; min-height: 100dvh;
-  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  padding: max(16px, env(safe-area-inset-top)) 16px calc(var(--bar-h) + 24px + env(safe-area-inset-bottom));
   user-select: none;
 }
-button { font: inherit; color: inherit; cursor: pointer; border: 0; touch-action: manipulation; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; touch-action: manipulation; }
 button:active { transform: scale(.97); }
+button:disabled { opacity: .35; }
+button:focus-visible, a:focus-visible, label:focus-within { outline: 4px solid #2563eb; outline-offset: 3px; }
 img { display: block; }
 [hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
 
-/* מסך הבית */
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.tile {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  min-height: 42vw; max-height: 260px; border-radius: var(--r); color: #fff;
-  box-shadow: 0 6px 0 rgba(0,0,0,.18);
-}
-.tile .icon { font-size: 72px; line-height: 1; }
-.tile .lbl { font-size: 30px; font-weight: 700; }
-.tile .sub { font-size: 17px; opacity: .85; }
-.green { background: var(--green); color: #fff; }
-.red { background: var(--red); color: #fff; }
-.blue { background: var(--blue); color: #fff; }
-.yellow { background: var(--yellow); color: #1d1d1b; }
-.purple { background: var(--purple); color: #fff; }
+/* תפקידים – בכל המסכים אותם צבעים */
+.primary { background: var(--accent); color: var(--accent-ink); }
+.secondary { background: var(--card); color: var(--ink); border: 2px solid var(--line); }
+.danger { background: var(--danger); color: #fff; }
+.caution { background: var(--caution); color: var(--ink); }
+.wa { background: var(--wa); color: #fff; }
+.help { background: var(--card); color: var(--accent); border: 3px solid var(--accent); }
+.lift { box-shadow: 0 5px 0 rgba(0,0,0,.16); }
 
-.gear {
-  position: fixed; inset-inline-end: 14px; bottom: 14px; width: 56px; height: 56px;
-  border-radius: 50%; background: #e9e2d4; font-size: 26px; opacity: .6;
+/* ---------- בית ---------- */
+.top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.speaker {
+  width: 64px; height: 64px; border-radius: 50%; font-size: 30px; flex: none;
+  background: var(--card); border: 2px solid var(--line);
 }
-.gear .ring { position: absolute; inset: 0; border-radius: 50%; border: 4px solid var(--green); clip-path: inset(100% 0 0 0); }
+.big-speaker { width: 76px; height: 76px; font-size: 36px; }
+.gear { width: 52px; height: 52px; border-radius: 50%; background: #ebe5d9; font-size: 24px; opacity: .55; position: relative; }
+.gear .ring { position: absolute; inset: 0; border-radius: 50%; border: 4px solid var(--accent); clip-path: inset(100% 0 0 0); }
 .gear.holding .ring { transition: clip-path 3s linear; clip-path: inset(0 0 0 0); }
 
-/* מסך הבית: 3 פעולות ראשיות גדולות + שורת כלים קטנה */
 .main-actions { display: flex; flex-direction: column; gap: 16px; }
 .big {
-  display: flex; align-items: center; gap: 18px; padding: 18px 22px; min-height: 26vw; max-height: 170px;
+  display: flex; align-items: center; gap: 18px; padding: 20px 22px; min-height: 132px;
   border-radius: var(--r); text-align: start; box-shadow: 0 6px 0 rgba(0,0,0,.18);
 }
-.big .icon { font-size: 76px; line-height: 1; }
-.big .txt { display: flex; flex-direction: column; }
+.big .icon { font-size: 72px; line-height: 1; }
+.big .txt { display: flex; flex-direction: column; gap: 2px; }
 .big .lbl { font-size: 32px; font-weight: 800; }
 .big .sub { font-size: 17px; opacity: .85; }
-.extras { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; padding-bottom: 70px; }
-.small {
+.extras { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+.extra {
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px;
-  border-radius: 20px; box-shadow: 0 4px 0 rgba(0,0,0,.15);
+  border-radius: 20px; background: var(--card); border: 2px solid var(--line);
 }
-.small .icon { font-size: 40px; line-height: 1; }
-.small .lbl { font-size: 15px; font-weight: 700; }
+.extra.danger { border-color: var(--danger); }
+.extra .icon { font-size: 38px; line-height: 1; }
+.extra .lbl { font-size: 14px; font-weight: 700; }
 
-/* כפתור חזרה הביתה – תמיד באותו מקום */
-.home-btn {
-  display: block; width: 100%; height: 76px; margin-bottom: 16px; border-radius: var(--r);
-  background: #e9e2d4; font-size: 44px;
+/* ---------- הפס התחתון: בית + עזרה מאדם ---------- */
+.bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; gap: 12px;
+  padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: color-mix(in srgb, var(--bg) 92%, transparent); border-top: 1px solid var(--line);
+  backdrop-filter: blur(6px);
 }
+.bar button { height: 72px; border-radius: 22px; font-size: 22px; font-weight: 700; }
+.bar-home { width: 92px; flex: none; background: var(--card); border: 2px solid var(--line); font-size: 38px; }
+.bar-help { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--card); color: var(--accent); border: 3px solid var(--accent); }
+.bar-help .icon { font-size: 36px; }
 
-/* משפחה */
-.people { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.person { background: var(--card); border-radius: var(--r); padding: 10px; box-shadow: 0 4px 0 rgba(0,0,0,.08); }
-.face { display: block; width: 100%; padding: 0; background: none; position: relative; }
-.face img, .face .initial {
-  width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 20px;
+/* ---------- רכיבים משותפים ---------- */
+.center { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; }
+.guide {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  background: var(--card); border-radius: 22px; padding: 12px 14px; text-align: start;
 }
-.face .initial { display: grid; place-items: center; background: #d9e8df; font-size: 80px; font-weight: 700; }
-.face .name { display: block; margin-top: 6px; font-size: 22px; font-weight: 700; text-align: center; }
-.actions { display: flex; gap: 8px; margin-top: 8px; }
-.act { flex: 1; height: 64px; border-radius: 18px; font-size: 32px; }
-.act.wa { background: var(--wa); }
-
-/* רשימות (חירום, תרופות) */
-.list { display: flex; flex-direction: column; gap: 16px; }
-.row {
-  display: flex; align-items: center; gap: 16px; padding: 16px 20px; min-height: 110px;
-  border-radius: var(--r); text-align: start; box-shadow: 0 6px 0 rgba(0,0,0,.18);
-}
-.row .icon { font-size: 54px; width: 70px; display: grid; place-items: center; }
-.row .icon img { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; }
-.row .lbl { flex: 1; font-size: 28px; font-weight: 700; }
-.row .lbl small { display: block; font-size: 17px; font-weight: 400; opacity: .85; }
-.row .num { font-size: 40px; font-weight: 800; direction: ltr; }
-
-.time { background: var(--card); border-radius: var(--r); padding: 12px; }
-.time.now { outline: 6px solid var(--yellow); }
-.time-head { display: flex; align-items: center; gap: 10px; background: none; font-size: 28px; font-weight: 700; }
-.time-head .icon { font-size: 48px; }
-.pills { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
-.pill { background: #e8eff8; border-radius: 20px; padding: 10px; display: flex; flex-direction: column; align-items: center; }
-.pill img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; }
-.pill .icon { font-size: 64px; }
-.pill .name { font-size: 18px; margin-top: 4px; }
-
-/* מכתב / שיעורים */
-.center { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 20px; }
+.guide .step-text { flex: 1; }
+.step-icon { font-size: 110px; line-height: 1.1; }
+.step-text { font-size: 28px; font-weight: 700; line-height: 1.5; margin: 0; }
+.step-text.small { font-size: 23px; font-weight: 600; }
 .big-action {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  width: 100%; min-height: 60vw; border-radius: var(--r); box-shadow: 0 6px 0 rgba(0,0,0,.18); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; min-height: 200px; border-radius: var(--r); box-shadow: 0 6px 0 rgba(0,0,0,.18);
 }
-.big-action .icon { font-size: 110px; }
-.big-action .lbl { font-size: 32px; font-weight: 700; }
-.status { font-size: 26px; }
+.big-action .icon { font-size: 96px; line-height: 1; }
+.big-action .lbl { font-size: 30px; font-weight: 800; }
+.wide {
+  display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%;
+  min-height: 76px; padding: 10px 18px; border-radius: 22px; font-size: 24px; font-weight: 700;
+}
+.wide .icon { font-size: 36px; }
+.thumb { max-width: 60%; max-height: 32vh; border-radius: 16px; border: 3px solid var(--line); }
+
+/* כן / לא – באותו גודל, כי שתי התשובות לגיטימיות */
+.yesno { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; }
+.yesno button {
+  height: 110px; border-radius: var(--r); font-size: 44px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; box-shadow: 0 5px 0 rgba(0,0,0,.14);
+}
+.yesno span { font-size: 20px; font-weight: 700; }
+.yesno .yes { background: var(--accent); color: var(--accent-ink); }
+.yesno .no { background: var(--card); border: 2px solid var(--line); }
+
+/* שורת פעולות: שוב / לאט יותר / שאלה */
+.controls { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; width: 100%; }
+.controls button {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px;
+  border-radius: 20px; background: var(--card); border: 2px solid var(--line); font-size: 16px; font-weight: 700;
+}
+.controls .icon { font-size: 34px; }
+
+.demo { font-family: system-ui, sans-serif; font-size: 15px; text-align: center; background: #eee8f7; border-radius: 12px; padding: 6px 10px; margin: 0; }
 .empty { text-align: center; font-size: 26px; line-height: 1.6; margin-top: 10vh; }
-.empty::first-line { font-size: 80px; }
 
-.dots { display: flex; gap: 10px; }
-.dots span { width: 18px; height: 18px; border-radius: 50%; background: #d8d0c0; }
-.dots span.on { background: var(--purple); }
-.step-icon { font-size: 150px; line-height: 1.1; }
-.step-text { font-size: 30px; font-weight: 700; line-height: 1.5; margin: 0; min-height: 3em; }
-.step-nav { display: flex; gap: 16px; width: 100%; }
-.again { flex: 1; height: 100px; border-radius: var(--r); background: #e9e2d4; font-size: 44px; }
-.next { flex: 2; height: 100px; border-radius: var(--r); font-size: 50px; box-shadow: 0 6px 0 rgba(0,0,0,.18); }
-.center > .next { width: 100%; flex: none; }
-
-/* מסך הגדרות – לבני המשפחה, טקסט רגיל */
-.settings { font-family: system-ui, sans-serif; font-size: 17px; user-select: text; padding-bottom: 60px; }
-.settings header { display: flex; justify-content: space-between; align-items: center; }
-.settings h1 { font-size: 24px; margin: 0; }
-.settings h2 { font-size: 19px; margin: 0 0 6px; }
-.settings section { background: var(--card); border-radius: 16px; padding: 14px; margin-top: 14px; }
-.settings .hint { color: #6a6458; font-size: 15px; margin: 4px 0 10px; }
-.settings input, .settings select { font: inherit; padding: 10px; border: 1px solid #cfc6b4; border-radius: 10px; width: 100%; }
-.settings .add { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-.settings .add > button, .settings .file {
-  padding: 12px; border-radius: 10px; background: var(--green); color: #fff; text-align: center; font-weight: 600;
-}
-.settings .file { background: #e9e2d4; color: var(--ink); cursor: pointer; }
-.settings .times { display: flex; flex-wrap: wrap; gap: 10px; }
-.settings .times label { display: flex; gap: 4px; align-items: center; }
-.settings .times input { width: auto; }
-.item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee5d5; }
-.item img, .item .ph { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; font-size: 30px; display: grid; place-items: center; }
-.item .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.mini { padding: 8px 10px; border-radius: 10px; background: #e9e2d4; font-size: 15px; white-space: nowrap; }
-.mini.rec.on { background: var(--red); color: #fff; }
-.mini.danger { background: #f3d6d3; }
-
-/* צילום / הקלטה / המתנה */
-.hint-icons { font-size: 54px; letter-spacing: 16px; opacity: .8; }
-.about { font-size: 26px; background: var(--card); border-radius: 18px; padding: 10px 18px; }
-.mic {
-  width: 62vw; max-width: 280px; aspect-ratio: 1; border-radius: 50%; font-size: 110px;
-  background: var(--blue); box-shadow: 0 8px 0 rgba(0,0,0,.2); margin-top: 4vh;
-}
-.mic.on { background: var(--red); animation: pulse 1.2s ease-in-out infinite; }
-.step-text.small { font-size: 24px; font-weight: 600; }
-.working { margin-top: 14vh; }
+/* ---------- עבודה ---------- */
+.working { margin-top: 16vh; }
 .spinner {
-  width: 120px; height: 120px; border-radius: 50%; border: 14px solid #e9e2d4; border-top-color: var(--yellow);
+  width: 110px; height: 110px; border-radius: 50%; border: 12px solid var(--line); border-top-color: var(--accent);
   animation: spin 1s linear infinite;
 }
+.spinner.small { width: 56px; height: 56px; border-width: 7px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes pulse { 50% { box-shadow: 0 0 0 22px rgba(184,50,42,.25); } }
+@keyframes pulse { 50% { box-shadow: 0 0 0 22px color-mix(in srgb, var(--listen) 25%, transparent); } }
 
-/* תשובה */
-.result { display: flex; flex-direction: column; gap: 14px; }
-.demo { font-family: system-ui, sans-serif; font-size: 15px; text-align: center; background: #efe7f8; border-radius: 12px; padding: 6px; }
-.warn { padding: 16px; border-radius: 20px; font-size: 22px; font-weight: 700; text-align: start; }
-.play {
-  height: 30vw; max-height: 170px; border-radius: var(--r); font-size: 96px;
-  background: var(--yellow); box-shadow: 0 6px 0 rgba(0,0,0,.18);
+/* ---------- מיקרופון ---------- */
+.about { font-size: 24px; background: var(--card); border-radius: 18px; padding: 10px 18px; }
+.mic {
+  width: 58vw; max-width: 250px; aspect-ratio: 1; border-radius: 50%; font-size: 100px;
+  background: var(--accent); color: #fff; box-shadow: 0 8px 0 rgba(0,0,0,.2);
 }
+.mic.on { background: var(--listen); animation: pulse 1.2s ease-in-out infinite; }
+.mic.failed { background: #9a948a; }
+.mic.provider { background: #1e4f8a; }
+#micFallback { width: 100%; }
+.typed-ask { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.typed-ask textarea {
+  font: inherit; font-size: 22px; padding: 14px; border-radius: 18px; border: 2px solid var(--line);
+  background: var(--card); color: var(--ink); resize: vertical; user-select: text;
+}
+
+/* ---------- תשובה ---------- */
+.result { display: flex; flex-direction: column; gap: 14px; }
+.warn { padding: 16px; border-radius: 20px; font-size: 22px; font-weight: 700; text-align: start; }
+.play { height: 150px; border-radius: var(--r); font-size: 88px; box-shadow: 0 6px 0 rgba(0,0,0,.18); }
 .facts { display: flex; flex-direction: column; gap: 8px; }
 .fact {
   display: flex; align-items: center; gap: 14px; background: var(--card); border-radius: 18px; padding: 10px 14px;
   font-family: system-ui, sans-serif; font-size: 21px; font-weight: 600; direction: rtl;
 }
-.fact .icon { font-size: 38px; }
-.fact small { display: block; font-size: 14px; font-weight: 400; color: #6a6458; }
+.fact.muted { background: #fbf3dc; }
+.fact .icon { font-size: 36px; }
+.fact small { display: block; font-size: 14px; font-weight: 400; color: var(--muted); }
 .fulltext { font-family: system-ui, sans-serif; font-size: 16px; direction: rtl; background: var(--card); border-radius: 14px; padding: 10px 14px; }
-.fulltext summary { cursor: pointer; color: #6a6458; }
-.result-nav { display: flex; gap: 14px; }
-.result-nav button { flex: 1; height: 96px; border-radius: var(--r); font-size: 54px; box-shadow: 0 6px 0 rgba(0,0,0,.18); }
-.pulse { animation: pulse 1.6s ease-in-out infinite; }
-.row.wa { background: var(--wa); color: #fff; }
-a.row { color: #fff; text-decoration: none; }
+.fulltext summary { cursor: pointer; color: var(--muted); }
+
+/* ---------- מתורגמן ---------- */
+.talk { display: flex; flex-direction: column; gap: 14px; }
+.turns { display: flex; flex-direction: column; gap: 10px; max-height: 42vh; overflow-y: auto; }
+.talk-hint { font-size: 22px; background: var(--card); border-radius: 18px; padding: 14px; margin: 0; }
+.bubble { display: flex; gap: 10px; padding: 12px 14px; border-radius: 18px; background: var(--card); font-size: 18px; }
+.bubble .who { font-size: 32px; }
+.bubble p { margin: 0; }
+.bubble .said { color: var(--muted); font-size: 16px; }
+.bubble .translated { font-size: 24px; font-weight: 700; }
+.from-user { border-inline-start: 6px solid var(--accent); }
+.from-provider { border-inline-start: 6px solid #1e4f8a; }
+.bubble.assistant { background: var(--accent-soft); font-size: 19px; }
+.bubble.assistant.warn { background: #fde7e4; border: 2px solid var(--danger); }
+.talk-panel { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.talk-panel .mic { width: 44vw; max-width: 190px; font-size: 76px; }
+.talk-panel.provider { background: #e7eef8; border-radius: var(--r); padding: 14px; font-family: system-ui, sans-serif; }
+.talk-panel.provider .step-text { font-size: 26px; font-weight: 800; color: #1e4f8a; }
+.handover { margin: 0; font-size: 18px; }
+
+/* ---------- עזרה / משפחה / רשימות ---------- */
+.list { display: flex; flex-direction: column; gap: 14px; }
+.row {
+  display: flex; align-items: center; gap: 16px; padding: 14px 20px; min-height: 100px; width: 100%;
+  border-radius: var(--r); text-align: start; box-shadow: 0 5px 0 rgba(0,0,0,.14);
+}
+.row .icon { font-size: 50px; width: 70px; display: grid; place-items: center; }
+.row .lbl { flex: 1; font-size: 26px; font-weight: 700; }
+.row .lbl small { display: block; font-size: 16px; font-weight: 400; opacity: .85; }
+.row .num { font-size: 36px; font-weight: 800; direction: ltr; }
+.quick-setup {
+  display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 14px; border-radius: 20px;
+  background: var(--card); border: 2px dashed var(--line); font-family: system-ui, sans-serif; text-align: start; user-select: text;
+}
+.quick-setup .hint { margin: 0; color: var(--muted); font-size: 17px; }
+.quick-setup input { font: inherit; font-size: 20px; padding: 12px; border-radius: 12px; border: 2px solid var(--line); width: 100%; }
+.file { cursor: pointer; }
+
+.people { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.person { background: var(--card); border-radius: var(--r); padding: 10px; }
+.face { display: block; width: 100%; padding: 0; }
+.face img, .face .initial { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 20px; }
+.face .initial { display: grid; place-items: center; background: var(--accent-soft); font-size: 80px; font-weight: 700; }
+.face .name { display: block; margin-top: 6px; font-size: 22px; font-weight: 700; text-align: center; }
+.actions { display: flex; gap: 8px; margin-top: 8px; }
+.act { flex: 1; height: 64px; border-radius: 18px; font-size: 32px; }
+
+.time { background: var(--card); border-radius: var(--r); padding: 12px; }
+.time.now { outline: 6px solid var(--caution); }
+.time-head { display: flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 700; }
+.time-head .icon { font-size: 46px; }
+.pills { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.pill { background: var(--accent-soft); border-radius: 20px; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+.pill img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; }
+.pill .icon { font-size: 60px; }
+.pill .name { font-size: 18px; margin-top: 4px; }
+
+/* ---------- למידה ---------- */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 16px 8px;
+  min-height: 170px; border-radius: var(--r); background: var(--card); border: 2px solid var(--line);
+}
+.tile .icon { font-size: 64px; line-height: 1; }
+.tile .lbl { font-size: 24px; font-weight: 800; text-align: center; }
+.tile .sub { font-size: 15px; color: var(--muted); }
+.dots { display: flex; gap: 10px; }
+.dots span { width: 18px; height: 18px; border-radius: 50%; background: var(--line); }
+.dots span.on { background: var(--accent); }
+
+/* ---------- הגדרות (לבני המשפחה, טקסט רגיל) ---------- */
+.settings { font-family: system-ui, sans-serif; font-size: 17px; user-select: text; }
+.settings header { display: flex; justify-content: space-between; align-items: center; }
+.settings h1 { font-size: 24px; margin: 0; }
+.settings h2 { font-size: 19px; margin: 0 0 6px; }
+.settings section { background: var(--card); border-radius: 16px; padding: 14px; margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.settings .hint { color: var(--muted); font-size: 15px; margin: 0; }
+.settings input, .settings select { font: inherit; padding: 10px; border: 1px solid #cfc6b4; border-radius: 10px; width: 100%; }
+.settings .add { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.settings .add > button, .settings .file {
+  padding: 12px; border-radius: 10px; background: var(--accent); color: #fff; text-align: center; font-weight: 600;
+}
+.settings .file { background: #ebe5d9; color: var(--ink); }
+.settings .times { display: flex; flex-wrap: wrap; gap: 10px; }
+.settings .times label { display: flex; gap: 4px; align-items: center; }
+.settings .times input { width: auto; }
+.settings .times.missing { outline: 2px solid var(--danger); border-radius: 8px; }
+.item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee5d5; }
+.item img, .item .ph { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; font-size: 30px; display: grid; place-items: center; flex: none; }
+.item .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mini { padding: 8px 10px; border-radius: 10px; background: #ebe5d9; font-size: 15px; white-space: nowrap; }
+.mini.rec.on { background: var(--danger); color: #fff; }
+.mini.danger { background: #f3d6d3; color: var(--ink); }
 
 @media (min-width: 700px) {
   body { max-width: 640px; margin: 0 auto; }
-  .tile { min-height: 220px; }
-  .big-action { min-height: 340px; }
-  .big { min-height: 150px; } .play { height: 160px; }
+  .bar { max-width: 640px; margin: 0 auto; }
 }
-
-/* שאלה מוקלדת (דף ההדגמה בלבד) */
-.typed-ask { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-.typed-ask textarea {
-  font: inherit; font-size: 22px; padding: 14px; border-radius: 18px; border: 2px solid #cfc6b4;
-  background: var(--card); color: var(--ink); direction: auto; resize: vertical;
-}
-.typed-ask .next { flex: none; width: 100%; }
-.settings .times.missing { outline: 2px solid var(--red); border-radius: 8px; }
-:root { color-scheme: light; }

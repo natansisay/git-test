@@ -2,7 +2,8 @@
 //
 //  POST /api/explain  {image: base64, mime}            -> הסבר מובנה למסמך (עובדות + טקסט באמהרית ובעברית)
 //  POST /api/ask      {audio: base64, mime, context?}  -> תשובה לשאלה קולית
-//  POST /api/speak    {text, token}                    -> קובץ MP3 באמהרית (רק לטקסט שהשרת עצמו יצר)
+//  POST /api/translate {audio, mime, speaker, history} -> תרגום בשיחה (user=אמהרית→עברית, provider=עברית→אמהרית)
+//  POST /api/speak    {text, lang, token, rate?}       -> קובץ MP3 באמהרית/עברית (רק לטקסט שהשרת עצמו יצר)
 //
 // שום תמונה או הקלטה לא נשמרת כאן. הכול מעובד בזיכרון ונשכח.
 // ספקים: Gemini (קריאת המסמך + הבנה + תרגום) ו-Azure Speech (קול אמהרי). לשניהם יש שכבה חינמית.
@@ -10,7 +11,7 @@
 const DEFAULT_MODEL = 'gemini-2.5-flash';   // לעדכן למודל Flash העדכני (משתנה GEMINI_MODEL)
 const MAX_UPLOAD = 8 * 1024 * 1024;
 
-import { EXPLAIN_PROMPT, ASK_PROMPT, EXPLAIN_SCHEMA, ASK_SCHEMA } from '../../app/prompts.js';
+import { EXPLAIN_PROMPT, ASK_PROMPT, TRANSLATE_PROMPT, EXPLAIN_SCHEMA, ASK_SCHEMA, TRANSLATE_SCHEMA } from '../../app/prompts.js';
 
 // ---------- ספקים ----------
 async function gemini(env, prompt, media, schema, extraText) {
@@ -37,9 +38,15 @@ function escapeXml(s) {
   return s.replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
 }
 
-async function azureTts(env, text) {
-  const voice = env.AZURE_VOICE || 'am-ET-MekdesNeural'; // קול נשי; גברי: am-ET-AmehaNeural
-  const ssml = `<speak version="1.0" xml:lang="am-ET"><voice name="${voice}"><prosody rate="-12%">${escapeXml(text)}</prosody></voice></speak>`;
+const VOICES = {
+  am: env => ['am-ET', env.AZURE_VOICE || 'am-ET-MekdesNeural'], // קול נשי; גברי: am-ET-AmehaNeural
+  he: env => ['he-IL', env.AZURE_VOICE_HE || 'he-IL-HilaNeural'],
+};
+
+async function azureTts(env, text, lang = 'am', rate = 0.88) {
+  const [xmlLang, voice] = VOICES[lang](env);
+  const pct = Math.round((Math.min(1.2, Math.max(0.6, rate)) - 1) * 100);
+  const ssml = `<speak version="1.0" xml:lang="${xmlLang}"><voice name="${voice}"><prosody rate="${pct}%">${escapeXml(text)}</prosody></voice></speak>`;
   return fetch(`https://${env.AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: 'POST',
     headers: {
@@ -60,10 +67,12 @@ async function sign(env, text) {
   return [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+const canSpeak = env => Boolean(env.AZURE_SPEECH_KEY && env.AZURE_SPEECH_REGION && env.SIGNING_SECRET);
+const speakable = async (env, text, lang) =>
+  canSpeak(env) && text ? { text, lang, token: await sign(env, lang + '|' + text) } : null;
+
 async function withVoice(env, result, field) {
-  const text = result[field];
-  const canSpeak = Boolean(env.AZURE_SPEECH_KEY && env.AZURE_SPEECH_REGION && env.SIGNING_SECRET && text);
-  return { ...result, speak: canSpeak ? { text, token: await sign(env, text) } : null };
+  return { ...result, speak: await speakable(env, result[field], 'am') };
 }
 
 // ---------- HTTP ----------
@@ -122,12 +131,34 @@ export default {
         return json(await withVoice(env, r, 'answer_am'), 200, h);
       }
 
+      if (pathname === '/api/translate') {
+        const { audio, mime = 'audio/wav', speaker, history = [] } = await readJson(req);
+        if (!audio || !AUDIO_TYPES.includes(mime) || !['user', 'provider'].includes(speaker)) throw new HttpError(400, 'bad input');
+        const who = speaker === 'user'
+          ? 'This utterance is from the USER, in Amharic. Translate it into Hebrew.'
+          : 'This utterance is from the PROVIDER, in Hebrew. Translate it into Amharic.';
+        const ctx = history.slice(-6).map(t => `${t.speaker}: ${String(t.original).slice(0, 300)}`).join('\n');
+        const r = await gemini(env, TRANSLATE_PROMPT, { mime, data: audio }, TRANSLATE_SCHEMA,
+          `${who}${ctx ? '\n\nRecent conversation:\n' + ctx : ''}`);
+        const [own, other] = speaker === 'user' ? ['am', 'he'] : ['he', 'am'];
+        return json({
+          ...r,
+          speak: {
+            translation: await speakable(env, r.translation, other),
+            clarify: await speakable(env, r.clarify_question, own),
+            sensitive: await speakable(env, r.sensitive_note_am, 'am'),
+            verify: await speakable(env, r.verify_hint_am, 'am'),
+          },
+        }, 200, h);
+      }
+
       if (pathname === '/api/speak') {
-        const { text, token } = await readJson(req);
-        if (typeof text !== 'string' || text.length > 2000 || !token || token !== (await sign(env, text))) {
+        const { text, lang = 'am', token, rate } = await readJson(req);
+        if (typeof text !== 'string' || text.length > 2000 || !VOICES[lang] || !token
+            || token !== (await sign(env, lang + '|' + text))) {
           throw new HttpError(403, 'bad token');
         }
-        const res = await azureTts(env, text);
+        const res = await azureTts(env, text, lang, Number(rate) || undefined);
         if (!res.ok) throw new HttpError(502, `tts ${res.status}`);
         return new Response(res.body, {
           headers: { ...h, 'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, max-age=3600' },
