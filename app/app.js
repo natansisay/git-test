@@ -2,7 +2,7 @@ import { MAIN, EXTRAS, TILES, FACTS, EMERGENCY, TIMES, PHRASES, LESSONS } from '
 import { loadSettings, saveSettings, newId, putBlob, getBlob, delBlob, resizeImage } from './store.js';
 import { say, sayThen, startRecording, playUrl, stop } from './voice.js';
 import { startWavRecording } from './recorder.js';
-import { API_URL } from './config.js';
+import { backend, explainPhoto, ask, speakResult, stopSpeaking } from './ai.js';
 
 const app = document.getElementById('app');
 let S = loadSettings();
@@ -27,7 +27,13 @@ export function intlPhone(p) {
 const telHref = p => 'tel:' + String(p || '').replace(/[^\d+*#]/g, '');
 const waHref = (p, text = '') => `https://wa.me/${intlPhone(p)}${text ? '?text=' + encodeURIComponent(text) : ''}`;
 
-const go = (screen, arg) => { location.hash = arg !== undefined ? `${screen}/${arg}` : screen; };
+const go = (screen, arg) => { location.hash = arg !== undefined ? `${screen}-${arg}` : screen; };
+// כתובות פשוטות בלבד (#doc, #lesson-answer-2) – כך זה עובד גם בדף ההדגמה ב-Claude
+function route() {
+  const h = location.hash.slice(1);
+  const i = h.indexOf('-');
+  return i < 0 ? [h || 'home', undefined] : [h.slice(0, i), h.slice(i + 1)];
+}
 const homeBtn = `<button class="home-btn" data-go="home" aria-label="בית">🏠</button>`;
 
 async function fillPhotos() {
@@ -37,62 +43,17 @@ async function fillPhotos() {
   }
 }
 
-const blobToBase64 = blob => new Promise((resolve, reject) => {
-  const r = new FileReader();
-  r.onload = () => resolve(String(r.result).split(',')[1]);
-  r.onerror = reject;
-  r.readAsDataURL(blob);
-});
-
-// ---------- תקשורת עם השרת ----------
-async function api(path, body) {
-  const res = await fetch(API_URL.replace(/\/$/, '') + path, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error('api ' + res.status);
-  return res;
-}
-
-// תשובות לדוגמה כשאין שרת – כדי לבדוק את החוויה עם משתמשים לפני שמשקיעים בטכנולוגיה
-const DEMO_DOC = {
-  demo: true, readable: true, document_type: 'invitation', event: 'חתונה', date: '2026-12-10', weekday_he: 'חמישי',
-  time: '19:30', place: 'אולם "הגן", רחובות', missing: ['כתובת מלאה'], review_required: false, scam_warning: false,
-  summary_am: 'ይህ የሰርግ ጥሪ ነው። ሰርጉ ሐሙስ፣ ታኅሣሥ 10 በፈረንጆች አቆጣጠር፣ ከምሽቱ አንድ ሰዓት ተኩል፣ በረሆቮት በሚገኘው ሀጋን አዳራሽ ነው። ሙሉ አድራሻው አልተጻፈም።',
-  summary_he: 'זו הזמנה לחתונה. החתונה ביום חמישי, 10 בדצמבר, בשעה 19:30, באולם "הגן" ברחובות. הכתובת המלאה לא כתובה.',
-};
-const DEMO_ANSWER = {
-  demo: true, understood: true, question_he: 'מתי החתונה?', review_required: false, scam_warning: false, emergency: false,
-  answer_am: 'ሰርጉ ሐሙስ ከምሽቱ አንድ ሰዓት ተኩል ነው።', answer_he: 'החתונה ביום חמישי בשעה 19:30.',
-};
-const wait = ms => new Promise(r => setTimeout(r, ms));
-
-async function explainPhoto(blob) {
-  if (!API_URL) { await wait(1500); return DEMO_DOC; }
-  return (await api('/api/explain', { image: await blobToBase64(blob), mime: 'image/jpeg' })).json();
-}
-
-async function askAudio(blob) {
-  if (!API_URL) { await wait(1500); return DEMO_ANSWER; }
-  const r = session.doc; // שאלה על המסמך האחרון שצולם
-  const context = r && r.summary_he ? Object.fromEntries(
-    ['document_type', 'event', 'date', 'weekday_he', 'time', 'place', 'sender', 'amount', 'deadline', 'action_he', 'summary_he']
-      .filter(k => r[k]).map(k => [k, r[k]])) : undefined;
-  return (await api('/api/ask', { audio: await blobToBase64(blob), mime: 'audio/wav', context })).json();
-}
-
-// משמיע את התשובה: קול אמהרי מהשרת, ואם אין – הקראה של הטלפון
+// משמיע את התשובה: קול אמהרי (מהשרת / מ-Claude), ואם אין – הקראה של הטלפון
 async function playResult() {
   const r = session.result;
   if (!r) return;
-  const am = r.summary_am ?? r.answer_am, he = r.summary_he ?? r.answer_he;
   try {
-    if (!session.audioUrl && r.speak && API_URL) {
-      const res = await api('/api/speak', r.speak);
-      session.audioUrl = URL.createObjectURL(await res.blob());
-    }
     if (session.audioUrl) return await playUrl(session.audioUrl);
+    const out = await speakResult(r);
+    if (out === 'spoken') return;
+    if (out) { session.audioUrl = out; return await playUrl(out); }
   } catch { /* נמשיך להקראה */ }
-  return say('result:x', { am, he }, S.lang);
+  return say('result:x', { am: r.summary_am ?? r.answer_am, he: r.summary_he ?? r.answer_he }, S.lang);
 }
 
 function setResult(r) {
@@ -175,6 +136,7 @@ const screens = {
     return `${homeBtn}
       <main class="result">
         ${r.demo ? `<div class="demo">🧪 ${esc(PHRASES.demo.he)}</div>` : ''}
+        ${r.via === 'claude' ? '<div class="demo">🤖 נקרא על ידי Claude (דף הדגמה)</div>' : ''}
         ${warn === 'scam' ? `<button class="warn red" data-say="scam">⚠️💰🚫 ${esc(label(PHRASES.scam))}</button>` : ''}
         ${warn === 'review' ? `<button class="warn yellow" data-say="review">⚠️🙋 ${esc(label(PHRASES.review))}</button>` : ''}
         ${warn === 'emergency' ? `<button class="warn red" data-emergency="mda">🚑 101</button>` : ''}
@@ -269,7 +231,7 @@ const screens = {
   },
 
   lesson(arg) {
-    const [key, n = '0'] = (arg || '').split('.');
+    const [key, n = '0'] = (arg || '').split('-');
     const l = LESSONS.find(x => x.key === key);
     if (!l) return screens.learn();
     const i = Math.min(+n, l.steps.length);
@@ -286,12 +248,12 @@ const screens = {
         <p class="step-text">${esc(label(st))}</p>
         <div class="step-nav">
           <button class="again" data-again aria-label="שוב">🔁</button>
-          <button class="next green" data-go="lesson" data-arg="${l.key}.${i + 1}" aria-label="הבא">▶</button>
+          <button class="next green" data-go="lesson" data-arg="${l.key}-${i + 1}" aria-label="הבא">▶</button>
         </div>
       </main>`;
   },
 
-  settings: () => settingsHtml(),
+  setup: () => settingsHtml(),
 };
 
 function consentHtml(next) {
@@ -327,7 +289,7 @@ function autoSay(screen, arg) {
   const t = TILES.find(x => x.key === screen);
   if (t) return say(t.key, sayText(t), S.lang);
   if (screen === 'lesson') {
-    const [key, n = '0'] = (arg || '').split('.');
+    const [key, n = '0'] = (arg || '').split('-');
     const l = LESSONS.find(x => x.key === key);
     if (!l) return;
     const st = l.steps[+n];
@@ -338,15 +300,15 @@ function autoSay(screen, arg) {
 }
 
 function render() {
-  const [screen = 'home', arg] = location.hash.slice(1).split('/');
+  const [screen, arg] = route();
   if (screen !== 'ask' && session.recorder) { session.recorder.stop(); session.recorder = null; }
   const fn = screens[screen] || screens.home;
   app.innerHTML = fn(arg);
-  document.documentElement.lang = screen === 'settings' ? 'he' : S.lang;
-  document.documentElement.dir = screen === 'settings' || S.lang === 'he' ? 'rtl' : 'ltr';
+  document.documentElement.lang = screen === 'setup' ? 'he' : S.lang;
+  document.documentElement.dir = screen === 'setup' || S.lang === 'he' ? 'rtl' : 'ltr';
   fillPhotos();
-  if (screen === 'settings') bindSettings();
-  else if (screen === 'home') { stop(); bindGear(); }
+  if (screen === 'setup') bindSettings();
+  else if (screen === 'home') { stop(); stopSpeaking(); bindGear(); }
   else autoSay(screen, arg);
   if (screen === 'doc') bindDoc();
   if (screen === 'ask') bindAsk();
@@ -374,13 +336,14 @@ function bindDoc() {
 }
 
 // ---------- שאלה קולית: לגעת → לדבר → לגעת שוב ----------
-function bindAsk() {
+async function bindAsk() {
   const mic = document.getElementById('mic');
   if (!mic) return;
+  if ((await backend()).kind === 'claude') return bindTypedAsk(mic);
   mic.addEventListener('click', async () => {
     if (!session.recorder) {
       stop();
-      try { session.recorder = await startWavRecording(); } catch { alert('🎤 ❌'); return; }
+      try { session.recorder = await startWavRecording(); } catch { document.getElementById('micText').textContent = '🎤 ❌'; return; }
       mic.classList.add('on'); mic.textContent = '⏹';
       return;
     }
@@ -389,12 +352,31 @@ function bindAsk() {
     if (seconds < 1) { render(); return; }
     go('working');
     try {
-      setResult(await askAudio(blob));
+      setResult(await ask(blob, session.doc));
       go('result');
     } catch {
       app.innerHTML = errorHtml(); sayPhrase('error');
     }
   });
+}
+
+// בדף ההדגמה ב-Claude אין מיקרופון – מקלידים את השאלה (באמהרית או בעברית)
+function bindTypedAsk(mic) {
+  mic.hidden = true;
+  const box = document.createElement('form');
+  box.className = 'typed-ask';
+  box.innerHTML = `<p class="demo">🧪 בהדגמה אין מיקרופון – הקלידו את השאלה. באתר האמיתי מדברים.</p>
+    <textarea id="typedQ" rows="3" placeholder="למשל: מתי צריך לשלם?"></textarea>
+    <button class="next blue" aria-label="שליחה">➤</button>`;
+  mic.after(box);
+  box.onsubmit = async e => {
+    e.preventDefault();
+    const q = box.querySelector('textarea').value.trim();
+    if (!q) return;
+    go('working');
+    try { setResult(await ask(q, session.doc)); go('result'); }
+    catch { app.innerHTML = errorHtml(); sayPhrase('error'); }
+  };
 }
 
 function errorHtml() {
@@ -444,8 +426,8 @@ app.addEventListener('click', e => {
   }
   if (d.med) { const m = S.meds.find(x => x.id === d.med); return say('med:' + m.id, { he: m.name, am: m.name }, S.lang); }
   if (d.time) { const t = TIMES.find(x => x.key === d.time); return say('time-' + t.key, t, S.lang); }
-  if (d.lesson) return go('lesson', d.lesson + '.0');
-  if (d.again !== undefined) { const [, arg] = location.hash.slice(1).split('/'); return autoSay('lesson', arg); }
+  if (d.lesson) return go('lesson', d.lesson + '-0');
+  if (d.again !== undefined) return autoSay('lesson', route()[1]);
   if (d.say) return sayPhrase(d.say);
 });
 
@@ -456,7 +438,7 @@ function bindGear() {
   const cancel = () => { clearTimeout(timer); g.classList.remove('holding'); };
   g.addEventListener('pointerdown', () => {
     g.classList.add('holding');
-    timer = setTimeout(() => { cancel(); go('settings'); }, 3000);
+    timer = setTimeout(() => { cancel(); go('setup'); }, 3000);
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => g.addEventListener(ev, cancel));
   g.addEventListener('contextmenu', e => e.preventDefault());
@@ -538,7 +520,7 @@ function settingsHtml() {
           ${recBtns(t.key)}</div>`).join('')}
     </section>
 
-    <p class="hint">${API_URL ? '🟢 מחובר לשרת' : '🧪 מצב הדגמה – השרת עוד לא מחובר (config.js)'}</p>
+    <p class="hint" id="backendState"></p>
   </main>`;
 }
 
@@ -546,6 +528,8 @@ function bindSettings() {
   const persist = () => saveSettings(S);
   document.getElementById('lang').onchange = e => { S.lang = e.target.value; persist(); };
   document.getElementById('helper').onchange = e => { S.helperPhone = e.target.value.trim(); persist(); };
+  backend().then(b => { document.getElementById('backendState').textContent =
+    { server: '🟢 מחובר לשרת', claude: '🤖 דף הדגמה ב-Claude – Claude קורא את המסמכים', demo: '🧪 מצב הדגמה – תשובות לדוגמה (השרת עוד לא מחובר)' }[b.kind]; });
   const revoke = document.getElementById('revoke');
   if (revoke) revoke.onclick = () => { S.consented = false; persist(); render(); };
 
@@ -566,7 +550,7 @@ function bindSettings() {
     e.preventDefault();
     const f = e.target, id = newId();
     const times = [...f.querySelectorAll('input[name=t]:checked')].map(x => x.value);
-    if (!times.length) return alert('בחרו לפחות זמן אחד');
+    if (!times.length) { f.querySelector('.times').classList.add('missing'); return; }
     await savePhoto(f, id);
     S.meds.push({ id, name: f.name.value.trim(), times });
     persist(); render();
@@ -577,12 +561,13 @@ function bindSettings() {
     const b = e.target.closest('button');
     if (!b) return;
     const d = b.dataset;
-    if (d.delContact && confirm('למחוק?')) {
+    if ((d.delContact || d.delMed) && !b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'בטוח? 🗑'; return; }
+    if (d.delContact) {
       S.contacts = S.contacts.filter(c => c.id !== d.delContact);
       await delBlob('photo:' + d.delContact); await delBlob('voice:contact:' + d.delContact);
       persist(); render();
     }
-    if (d.delMed && confirm('למחוק?')) {
+    if (d.delMed) {
       S.meds = S.meds.filter(m => m.id !== d.delMed);
       await delBlob('photo:' + d.delMed); await delBlob('voice:med:' + d.delMed);
       persist(); render();
@@ -598,7 +583,7 @@ function bindSettings() {
         try {
           recording = await startRecording();
           b.classList.add('on'); b.textContent = '⏹ עצירה';
-        } catch { alert('אין גישה למיקרופון'); }
+        } catch { b.textContent = '🎙️ ❌ אין מיקרופון'; }
       }
     }
   });

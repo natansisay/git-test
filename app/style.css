@@ -190,3 +190,13 @@ a.row { color: #fff; text-decoration: none; }
   .big-action { min-height: 340px; }
   .big { min-height: 150px; } .play { height: 160px; }
 }
+
+/* שאלה מוקלדת (דף ההדגמה בלבד) */
+.typed-ask { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.typed-ask textarea {
+  font: inherit; font-size: 22px; padding: 14px; border-radius: 18px; border: 2px solid #cfc6b4;
+  background: var(--card); color: var(--ink); direction: auto; resize: vertical;
+}
+.typed-ask .next { flex: none; width: 100%; }
+.settings .times.missing { outline: 2px solid var(--red); border-radius: 8px; }
+:root { color-scheme: light; }
