@@ -1,6 +1,6 @@
 // מאפשר לאפליקציה לעבוד גם בלי אינטרנט אחרי הפתיחה הראשונה
-const CACHE = 'erdata-v3';
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'content.js', 'store.js', 'voice.js', 'recorder.js', 'config.js', 'ai.js', 'prompts.js', 'icon.svg', 'manifest.webmanifest'];
+const CACHE = 'erdata-v4';
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'content.js', 'store.js', 'voice.js', 'recorder.js', 'config.js', 'ai.js', 'prompts.js', 'icons.js', 'icon.svg', 'manifest.webmanifest'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

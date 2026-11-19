@@ -3,6 +3,7 @@ import { loadSettings, saveSettings, newId, putBlob, getBlob, delBlob, resizeIma
 import { say, sayThen, startRecording, stop } from './voice.js';
 import { startWavRecording } from './recorder.js';
 import { backend, explainPhoto, ask, translate, speak, speakFixedAm, stopSpeaking } from './ai.js';
+import { icon } from './icons.js';
 
 const app = document.getElementById('app');
 let S = loadSettings();
@@ -49,11 +50,17 @@ function route() {
 // הפס התחתון: בית + עזרה מאדם – תמיד באותו מקום
 function bar({ home = true, help = true } = {}) {
   return `<nav class="bar">
-    ${home ? `<button class="bar-home" data-go="home" ${aria(PHRASES.home)}>🏠</button>` : ''}
-    ${help ? `<button class="bar-help" data-go="human" ${aria(HELP)}><span class="icon">${HELP.icon}</span><span>${esc(L(HELP))}</span></button>` : ''}
+    ${home ? `<button class="bar-home" data-go="home" ${aria(PHRASES.home)}>${icon('home')}</button>` : ''}
+    ${help ? `<button class="bar-help" data-go="human" ${aria(HELP)}>${icon('help')}<span>${esc(L(HELP))}</span></button>` : ''}
   </nav>`;
 }
-const speakerBtn = (attr, cls = '') => `<button class="speaker ${cls}" ${attr} ${aria(PHRASES.speakerBtn)}>🔊</button>`;
+const speakerBtn = (attr, cls = '') => `<button class="speaker ${cls}" ${attr} ${aria(PHRASES.speakerBtn)}>${icon('speaker')}</button>`;
+// כותרת לכל מסך – כדי שתמיד יהיה ברור איפה נמצאים
+const head = (ic, o, extra = '') => `<header class="screen-head">
+    <span class="badge">${icon(ic)}</span>
+    <div class="titles"><h1>${esc(L(o))}</h1>${sub(o) ? `<small lang="he">${esc(sub(o))}</small>` : ''}</div>${extra}
+  </header><div class="tibeb" aria-hidden="true"></div>`;
+const hero = (ic, cls = '') => `<div class="hero ${cls}">${icon(ic)}</div>`;
 
 async function fillPhotos() {
   for (const img of app.querySelectorAll('img[data-photo]')) {
@@ -75,39 +82,44 @@ async function playResult(rate = 1) {
 const screens = {
   home() {
     return `
-      <header class="top">
+      <header class="hello">
+        <div class="titles"><h1>${esc(L(PHRASES.hello))}</h1>${sub(PHRASES.hello) ? `<small lang="he">${esc(sub(PHRASES.hello))}</small>` : ''}</div>
         ${speakerBtn('data-intro', 'big-speaker')}
-        <button class="gear" id="gear" aria-label="הגדרות למשפחה (לחיצה ארוכה)">⚙️<span class="ring"></span></button>
       </header>
+      <div class="tibeb" aria-hidden="true"></div>
       <main class="main-actions">
         ${MAIN.map(t => `
-          <button class="big primary" data-tile="${t.key}" ${aria(t)}>
-            <span class="icon">${t.icon}</span>
-            <span class="txt"><span class="lbl">${esc(L(t))}</span><span class="sub">${esc(sub(t))}</span></span>
+          <button class="big" data-tile="${t.key}" ${aria(t)}>
+            <span class="big-ic">${icon(t.ic)}</span>
+            <span class="txt"><span class="lbl">${esc(L(t))}</span><span class="sub" lang="he">${esc(sub(t))}</span></span>
+            <span class="go">${icon('chevron')}</span>
           </button>`).join('')}
       </main>
+      <p class="section-label">${esc(L(PHRASES.more))}</p>
       <nav class="extras">
         ${EXTRAS.map(t => `
-          <button class="extra ${t.key === 'emergency' ? 'danger' : ''}" data-tile="${t.key}" ${aria(t)}>
-            <span class="icon">${t.icon}</span><span class="lbl">${esc(L(t))}</span>
+          <button class="extra ${t.key === 'emergency' ? 'danger-outline' : ''}" data-tile="${t.key}" ${aria(t)}>
+            <span class="ex-ic">${icon(t.ic)}</span><span class="lbl">${esc(L(t))}</span>
           </button>`).join('')}
       </nav>
+      <button class="gear" id="gear" aria-label="הגדרות למשפחה (לחיצה ארוכה)">${icon('gear')}<span class="ring"></span></button>
       ${bar({ home: false })}`;
   },
 
   // --- מכתב: הנחיה אחת, ושני כפתורים אמיתיים ---
   doc() {
     return `
+      ${head('letter', MAIN[0])}
       <main class="center">
         <div class="guide">
           <p class="step-text small">${esc(L(PHRASES.docGuide))}</p>
           ${speakerBtn('data-say="docGuide"')}
         </div>
         <button class="big-action primary" data-pick="camera">
-          <span class="icon">📷</span><span class="lbl">${esc(L(PHRASES.takePhoto))}</span>
+          <span class="ba-ic">${icon('camera')}</span><span class="lbl">${esc(L(PHRASES.takePhoto))}</span>
         </button>
         <button class="wide secondary" data-pick="file">
-          <span class="icon">🖼️</span><span>${esc(L(PHRASES.choosePhoto))}</span>
+          ${icon('image')}<span>${esc(L(PHRASES.choosePhoto))}</span>
         </button>
         <input type="file" accept="image/*" capture="environment" id="camInput" hidden>
         <input type="file" accept="image/*" id="fileInput" hidden>
@@ -117,7 +129,7 @@ const screens = {
 
   // --- הסכמה: אחרי שבחרו תמונה ולפני שליחה. אפשר לשמוע שוב. כן ולא באותו גודל ---
   consent(next) {
-    const thumb = next === 'send' && session.photoUrl ? `<img class="thumb" src="${session.photoUrl}" alt="">` : '<div class="step-icon">🔒</div>';
+    const thumb = next === 'send' && session.photoUrl ? `<img class="thumb" src="${session.photoUrl}" alt="">` : hero('lock');
     return `
       <main class="center">
         ${thumb}
@@ -126,8 +138,8 @@ const screens = {
           ${speakerBtn('data-say="consent"')}
         </div>
         <div class="yesno">
-          <button class="no" data-consent-no="${next}" ${aria(PHRASES.no)}>✖<span>${esc(L(PHRASES.no))}</span></button>
-          <button class="yes" data-consent-yes="${next}" ${aria(PHRASES.yes)}>✔<span>${esc(L(PHRASES.yes))}</span></button>
+          <button class="no" data-consent-no="${next}" ${aria(PHRASES.no)}>${icon('x')}<span>${esc(L(PHRASES.no))}</span></button>
+          <button class="yes" data-consent-yes="${next}" ${aria(PHRASES.yes)}>${icon('check')}<span>${esc(L(PHRASES.yes))}</span></button>
         </div>
       </main>
       ${bar()}`;
@@ -146,26 +158,26 @@ const screens = {
     // צילום לא הצליח: מה בדיוק לתקן, ואחרי שני כישלונות – גם אדם
     if (isDoc && !r.readable) {
       const hint = PHRASES['hint_' + r.retake_hint] ? 'hint_' + r.retake_hint : 'hint_blurry';
-      const icon = { cut_off: '📄↕️', blurry: '📄〰️', dark: '🌑', glare: '✨', too_far: '🔍', not_document: '❓' }[r.retake_hint] || '📄〰️';
+      const ic = { cut_off: 'crop', blurry: 'blur', dark: 'moon', glare: 'sun', too_far: 'zoom', not_document: 'letter' }[r.retake_hint] || 'blur';
       const stuck = session.fails >= 2;
       return `
         <main class="center">
-          <div class="step-icon">${icon}</div>
+          ${hero(ic, 'caution')}
           <div class="guide">
             <p class="step-text small">${esc(L(PHRASES[hint]))}${stuck ? '<br>' + esc(L(PHRASES.stillStuck)) : ''}</p>
             ${speakerBtn('data-say-result')}
           </div>
-          <button class="big-action primary" data-go="doc"><span class="icon">📷</span><span class="lbl">${esc(L(PHRASES.again))}</span></button>
-          ${stuck ? `<button class="wide help" data-go="human"><span class="icon">📞</span><span>${esc(L(HELP))}</span></button>` : ''}
+          <button class="big-action primary" data-go="doc"><span class="ba-ic">${icon('camera')}</span><span class="lbl">${esc(L(PHRASES.again))}</span></button>
+          ${stuck ? `<button class="wide help" data-go="human">${icon('phone')}<span>${esc(L(HELP))}</span></button>` : ''}
         </main>
         ${bar()}`;
     }
     if (r.understood === false) {
       return `
         <main class="center">
-          <div class="step-icon">🎤❓</div>
+          ${hero('mic', 'caution')}
           <div class="guide"><p class="step-text small">${esc(L(PHRASES.notHeard))}</p>${speakerBtn('data-say="notHeard"')}</div>
-          <button class="big-action primary" data-go="ask"><span class="icon">🎤</span><span class="lbl">${esc(L(PHRASES.again))}</span></button>
+          <button class="big-action primary" data-go="ask"><span class="ba-ic">${icon('mic')}</span><span class="lbl">${esc(L(PHRASES.again))}</span></button>
         </main>
         ${bar()}`;
     }
@@ -173,26 +185,27 @@ const screens = {
     const facts = isDoc ? FACTS.filter(f => r[f.key]).map(f => {
       let v = r[f.key];
       if (f.key === 'date' || f.key === 'deadline') v = formatDate(v, f.key === 'date' ? r.weekday_he : '');
-      return `<div class="fact"><span class="icon">${f.icon}</span><span><small>${f.he}</small>${esc(v)}</span></div>`;
-    }).join('') : `<div class="fact"><span class="icon">❓</span><span>${esc(r.question_he || '')}</span></div>`;
+      return `<div class="fact"><span class="f-ic">${icon(f.ic)}</span><span><small>${f.he}</small>${esc(v)}</span></div>`;
+    }).join('') : `<div class="fact"><span class="f-ic">${icon('question')}</span><span>${esc(r.question_he || '')}</span></div>`;
     const missing = isDoc && r.missing?.length
-      ? `<div class="fact muted"><span class="icon">⚠️</span><span><small>לא כתוב במסמך</small>${esc(r.missing.join(', '))}</span></div>` : '';
+      ? `<div class="fact muted"><span class="f-ic">${icon('warning')}</span><span><small>לא כתוב במסמך</small>${esc(r.missing.join(', '))}</span></div>` : '';
     const warn = r.scam_warning ? 'scam' : r.emergency ? 'emergency' : r.review_required ? 'review' : '';
     return `
       <main class="result">
         ${r.demo ? `<div class="demo">🧪 ${esc(PHRASES.demo.he)}</div>` : ''}
         ${r.via === 'claude' ? '<div class="demo">🤖 נקרא על ידי Claude (דף הדגמה)</div>' : ''}
-        ${warn === 'scam' ? `<button class="warn danger" data-say="scam">⚠️ ${esc(L(PHRASES.scam))}</button>` : ''}
-        ${warn === 'review' ? `<button class="warn caution" data-say="review">⚠️ ${esc(L(PHRASES.review))}</button>` : ''}
-        ${warn === 'emergency' ? `<button class="warn danger" data-emergency="mda">🚑 101</button>` : ''}
-        <button class="play primary" data-say-result ${aria(PHRASES.speakerBtn)}>🔊</button>
+        ${head(isDoc ? 'letter' : 'question', isDoc ? MAIN[0] : PHRASES.question)}
+        ${warn === 'scam' ? `<button class="warn danger" data-say="scam">${icon('warning')}<span>${esc(L(PHRASES.scam))}</span></button>` : ''}
+        ${warn === 'review' ? `<button class="warn caution" data-say="review">${icon('warning')}<span>${esc(L(PHRASES.review))}</span></button>` : ''}
+        ${warn === 'emergency' ? `<button class="warn danger" data-emergency="mda">${icon('emergency')}<span>101</span></button>` : ''}
+        <button class="play primary" data-say-result ${aria(PHRASES.speakerBtn)}>${icon('speaker')}</button>
         <div class="controls">
-          <button data-say-result ${aria(PHRASES.again)}><span class="icon">🔁</span><span>${esc(L(PHRASES.again))}</span></button>
-          <button data-slower ${aria(PHRASES.slower)}><span class="icon">🐢</span><span>${esc(L(PHRASES.slower))}</span></button>
-          <button data-go="ask" ${aria(PHRASES.question)}><span class="icon">🎤</span><span>${esc(L(PHRASES.question))}</span></button>
+          <button data-say-result ${aria(PHRASES.again)}>${icon('again')}<span>${esc(L(PHRASES.again))}</span></button>
+          <button data-slower ${aria(PHRASES.slower)}>${icon('slow')}<span>${esc(L(PHRASES.slower))}</span></button>
+          <button data-go="ask" ${aria(PHRASES.question)}>${icon('mic')}<span>${esc(L(PHRASES.question))}</span></button>
         </div>
         <div class="facts">${facts}${missing}</div>
-        <details class="fulltext"><summary>📝 הטקסט בעברית (לבני משפחה)</summary><p>${esc(r.summary_he ?? r.answer_he)}</p></details>
+        <details class="fulltext"><summary>הטקסט בעברית (לבני משפחה)</summary><p>${esc(r.summary_he ?? r.answer_he)}</p></details>
       </main>
       ${bar()}`;
   },
@@ -201,11 +214,12 @@ const screens = {
   ask() {
     if (!S.consented) return screens.consent('ask');
     const about = session.doc?.summary_he
-      ? `<div class="about">📄 ${esc(session.doc.sender || session.doc.event || '')}</div>` : '';
+      ? `<div class="about">${icon('letter')}<span>${esc(session.doc.sender || session.doc.event || '')}</span></div>` : '';
     return `
+      ${head('question', PHRASES.question)}
       <main class="center">
         ${about}
-        <button class="mic" id="mic" ${aria(PHRASES.tapToTalk)}>🎤</button>
+        <button class="mic" id="mic" ${aria(PHRASES.tapToTalk)}>${icon('mic')}</button>
         <div class="guide"><p class="step-text small" id="micText" role="status">${esc(L(PHRASES.tapToTalk))}</p>${speakerBtn('data-say="tapToTalk"')}</div>
         <div id="micFallback"></div>
       </main>
@@ -222,27 +236,28 @@ const screens = {
       panel = `<div class="talk-panel" role="status"><div class="spinner small"></div><p>${esc(L(PHRASES.working))}</p></div>`;
     } else if (t.phase === 'user') {
       panel = `<div class="talk-panel user">
-        <button class="mic" id="mic" ${aria(PHRASES.yourTurn)}>🎤</button>
+        <button class="mic" id="mic" ${aria(PHRASES.yourTurn)}>${icon('mic')}</button>
         <p class="step-text small" id="micText" role="status">${esc(L(PHRASES.yourTurn))}</p>
         <div id="micFallback"></div>
       </div>`;
     } else {
       panel = `<div class="talk-panel provider" lang="he" dir="rtl">
-        <p class="handover" lang="${S.lang}">📱➡️👩‍⚕️ ${esc(PHRASES.giveToProvider.am)}</p>
-        <button class="mic provider" id="mic" aria-label="${esc(PHRASES.giveToProvider.he)}">🎤</button>
+        <p class="handover" lang="am">${icon('arrow')} ${esc(PHRASES.giveToProvider.am)}</p>
+        <button class="mic provider" id="mic" aria-label="${esc(PHRASES.giveToProvider.he)}">${icon('mic')}</button>
         <p class="step-text small" id="micText" role="status">${esc(PHRASES.giveToProvider.he)}</p>
         <div id="micFallback"></div>
       </div>`;
     }
     const lastVerify = t.turns.at(-1)?.verify_hint_am;
     return `
+      ${head('talk', MAIN[1])}
       <main class="talk">
         <div class="turns" id="turns" aria-live="polite">${turns || `<p class="talk-hint">${esc(L(PHRASES.talkIntro))}</p>`}</div>
         ${panel}
         <div class="controls">
-          <button data-talk-again ${aria(PHRASES.again)} ${t.last.length ? '' : 'disabled'}><span class="icon">🔁</span><span>${esc(L(PHRASES.again))}</span></button>
-          <button data-talk-slower ${aria(PHRASES.slower)} ${t.last.length ? '' : 'disabled'}><span class="icon">🐢</span><span>${esc(L(PHRASES.slower))}</span></button>
-          ${lastVerify ? `<button data-go="doc" aria-label="${esc(lastVerify)}"><span class="icon">📷</span><span>${esc(L(PHRASES.takePhoto))}</span></button>` : ''}
+          <button data-talk-again ${aria(PHRASES.again)} ${t.last.length ? '' : 'disabled'}>${icon('again')}<span>${esc(L(PHRASES.again))}</span></button>
+          <button data-talk-slower ${aria(PHRASES.slower)} ${t.last.length ? '' : 'disabled'}>${icon('slow')}<span>${esc(L(PHRASES.slower))}</span></button>
+          ${lastVerify ? `<button data-go="doc" aria-label="${esc(lastVerify)}">${icon('camera')}<span>${esc(L(PHRASES.takePhoto))}</span></button>` : ''}
         </div>
       </main>
       ${bar()}`;
@@ -256,19 +271,20 @@ const screens = {
       return `
         <main class="center">
           ${session.photoUrl ? `<img class="thumb" src="${session.photoUrl}" alt="">` : ''}
-          <div class="guide"><p class="step-text small">${esc(L(PHRASES.shareDoc))} ➡️ ${name}</p>${speakerBtn('data-say-share')}</div>
+          <div class="guide"><p class="step-text small">${esc(L(PHRASES.shareDoc))} → ${name}</p>${speakerBtn('data-say-share')}</div>
           <div class="yesno">
-            <button class="no" data-go="human" ${aria(PHRASES.no)}>✖<span>${esc(L(PHRASES.no))}</span></button>
-            <button class="yes" data-share-yes ${aria(PHRASES.yes)}>✔<span>${esc(L(PHRASES.yes))}</span></button>
+            <button class="no" data-go="human" ${aria(PHRASES.no)}>${icon('x')}<span>${esc(L(PHRASES.no))}</span></button>
+            <button class="yes" data-share-yes ${aria(PHRASES.yes)}>${icon('check')}<span>${esc(L(PHRASES.yes))}</span></button>
           </div>
         </main>${bar()}`;
     }
     return `
+      ${head('help', HELP)}
       <main class="list">
-        <button class="row primary" data-helpcall><span class="icon">📞</span><span class="lbl">${name}</span></button>
-        <button class="row wa" data-helpwa><span class="icon">💬</span><span class="lbl">WhatsApp · ${name}</span></button>
-        ${session.photo ? `<button class="row secondary" data-go="human" data-arg="share"><span class="icon">📄➡️</span><span class="lbl">${esc(L(PHRASES.shareDoc))}</span></button>` : ''}
-        <button class="row danger" data-emergency="mda"><span class="icon">🚑</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
+        <button class="row primary" data-helpcall><span class="r-ic">${icon('phone')}</span><span class="lbl">${name}</span></button>
+        <button class="row wa" data-helpwa><span class="r-ic">${icon('chat')}</span><span class="lbl">WhatsApp · ${name}</span></button>
+        ${session.photo ? `<button class="row secondary" data-go="human" data-arg="share"><span class="r-ic">${icon('send')}</span><span class="lbl">${esc(L(PHRASES.shareDoc))}</span></button>` : ''}
+        <button class="row danger" data-emergency="mda"><span class="r-ic">${icon('emergency')}</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
       </main>
       ${bar({ help: false })}`;
   },
@@ -276,6 +292,7 @@ const screens = {
   family() {
     if (!S.contacts.length) return contactSetupHtml();
     return `
+      ${head('family', EXTRAS[0])}
       <main class="people">
         ${S.contacts.map(c => `
           <div class="person">
@@ -284,8 +301,8 @@ const screens = {
               <span class="name">${esc(c.name)}</span>
             </button>
             <div class="actions">
-              <button class="act primary" data-call="${c.id}" ${aria(PHRASES.call)}>📞</button>
-              <button class="act wa" data-wa="${c.id}" aria-label="WhatsApp">💬</button>
+              <button class="act primary" data-call="${c.id}" ${aria(PHRASES.call)}>${icon('phone')}</button>
+              <button class="act wa" data-wa="${c.id}" aria-label="WhatsApp">${icon('chat')}</button>
             </div>
           </div>`).join('')}
       </main>
@@ -294,10 +311,11 @@ const screens = {
 
   emergency() {
     return `
+      ${head('emergency', EXTRAS[1])}
       <main class="list">
         ${EMERGENCY.map(e => `
           <button class="row danger" data-emergency="${e.key}" ${aria(e)}>
-            <span class="icon">${e.icon}</span>
+            <span class="r-ic">${icon(e.ic)}</span>
             <span class="lbl">${esc(L(e))}<small>${esc(sub(e))}</small></span>
             <span class="num">${e.number}</span>
           </button>`).join('')}
@@ -307,12 +325,13 @@ const screens = {
 
   meds() {
     if (!S.meds.length) {
-      return `<main class="center"><div class="step-icon">💊</div>
+      return `${head('pill', EXTRAS[2])}<main class="center">
         <div class="guide"><p class="step-text small">${esc(L(PHRASES.noMeds))}</p>${speakerBtn('data-say="noMeds"')}</div>
-        <button class="wide secondary" data-go="setup">⚙️ ${esc(PHRASES.noMeds.he)} – להוספה (לבני משפחה)</button>
+        <button class="wide secondary" data-go="setup">${icon('gear')}<span lang="he">להוספת תרופות (לבני משפחה)</span></button>
       </main>${bar()}`;
     }
     return `
+      ${head('pill', EXTRAS[2])}
       <main class="list">
         ${TIMES.map(t => {
           const list = S.meds.filter(m => m.times.includes(t.key));
@@ -322,7 +341,7 @@ const screens = {
             <div class="pills">
               ${list.map(m => `
                 <button class="pill" data-med="${m.id}" aria-label="${esc(m.name)}">
-                  <img data-photo="photo:${m.id}" alt="" hidden><span class="icon">💊</span>
+                  <img data-photo="photo:${m.id}" alt="" hidden><span class="p-ic">${icon('pill')}</span>
                   <span class="name">${esc(m.name)}</span>
                 </button>`).join('')}
             </div>
@@ -334,6 +353,7 @@ const screens = {
 
   learn() {
     return `
+      ${head('learn', EXTRAS[3])}
       <main class="grid">
         ${LESSONS.map(l => `
           <button class="tile" data-lesson="${l.key}" ${aria(l)}>
@@ -353,7 +373,7 @@ const screens = {
     if (i === l.steps.length) {
       return `<main class="center"><div class="step-icon">🎉</div>
         <p class="step-text">${esc(L(PHRASES.done))}</p>
-        <button class="big-action primary" data-go="learn" ${aria(PHRASES.yes)}>✔</button></main>${bar()}`;
+        <button class="big-action primary" data-go="learn" ${aria(PHRASES.yes)}><span class="ba-ic">${icon('check')}</span></button></main>${bar()}`;
     }
     const st = l.steps[i];
     return `
@@ -362,8 +382,8 @@ const screens = {
         <div class="step-icon">${st.icon}</div>
         <p class="step-text">${esc(L(st))}</p>
         <div class="yesno">
-          <button class="no" data-again ${aria(PHRASES.again)}>🔁</button>
-          <button class="yes" data-go="lesson" data-arg="${l.key}-${i + 1}" aria-label="▶">▶</button>
+          <button class="no" data-again ${aria(PHRASES.again)}>${icon('again')}</button>
+          <button class="yes" data-go="lesson" data-arg="${l.key}-${i + 1}" aria-label="▶">${icon('arrow')}</button>
         </div>
       </main>
       ${bar()}`;
@@ -376,15 +396,15 @@ const screens = {
 function helperSetupHtml() {
   return `
     <main class="center">
-      <div class="step-icon">🙋👥</div>
+      ${hero('help')}
       <div class="guide"><p class="step-text small">${esc(L(PHRASES.helpSetup))}</p>${speakerBtn('data-say="helpSetup"')}</div>
       <form class="quick-setup" id="helperForm" lang="he" dir="rtl">
         <p class="hint">למי שעומד ליד: מי יעזור כשצריך? (בן/בת משפחה או מתנדב/ת)</p>
         <input id="qsName" name="name" placeholder="שם, למשל: דויד (הבן)" required>
         <input id="qsPhone" name="phone" type="tel" placeholder="טלפון 05X-XXXXXXX" required dir="ltr">
-        <button class="wide primary">✔ שמירה</button>
+        <button class="wide primary">${icon('check')}<span>שמירה</span></button>
       </form>
-      <button class="row danger" data-emergency="mda"><span class="icon">🚑</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
+      <button class="row danger" data-emergency="mda"><span class="r-ic">${icon('emergency')}</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
     </main>
     ${bar({ help: false })}`;
 }
@@ -392,14 +412,14 @@ function helperSetupHtml() {
 function contactSetupHtml() {
   return `
     <main class="center">
-      <div class="step-icon">👨‍👩‍👧➕</div>
+      ${hero('family')}
       <div class="guide"><p class="step-text small">${esc(L(PHRASES.noFamily))}</p>${speakerBtn('data-say="noFamily"')}</div>
       <form class="quick-setup" id="familyForm" lang="he" dir="rtl">
         <p class="hint">למי שעומד ליד: הוסיפו בן משפחה. התמונה היא מה שיזהו.</p>
         <input id="qfName" name="name" placeholder="שם" required>
         <input id="qfPhone" name="phone" type="tel" placeholder="טלפון 05X-XXXXXXX" required dir="ltr">
-        <label class="wide secondary file">📷 תמונה<input id="qfPhoto" name="photo" type="file" accept="image/*" hidden></label>
-        <button class="wide primary">✔ שמירה</button>
+        <label class="wide secondary file">${icon('camera')}<span>תמונה</span><input id="qfPhoto" name="photo" type="file" accept="image/*" hidden></label>
+        <button class="wide primary">${icon('check')}<span>שמירה</span></button>
       </form>
     </main>
     ${bar()}`;
@@ -408,14 +428,14 @@ function contactSetupHtml() {
 function turnHtml(t) {
   const fromUser = t.speaker === 'user';
   const main = `<div class="bubble ${fromUser ? 'from-user' : 'from-provider'}">
-      <span class="who">${fromUser ? '🧓' : '👩‍⚕️'}</span>
+      <span class="who">${icon(fromUser ? 'mic' : 'building')}</span>
       <div><p class="said" lang="${fromUser ? 'am' : 'he'}">${esc(t.original)}</p>
       <p class="translated" lang="${fromUser ? 'he' : 'am'}" dir="${fromUser ? 'rtl' : 'ltr'}">${esc(t.translation)}</p></div>
     </div>`;
   const notes = [
-    t.needs_clarification && t.clarify_question ? `<div class="bubble assistant">❓ ${esc(t.clarify_question)}</div>` : '',
-    t.sensitive && t.sensitive_note_am ? `<div class="bubble assistant warn">⚠️ ${esc(t.sensitive_note_am)}</div>` : '',
-    t.verify_hint_am ? `<div class="bubble assistant">📷 ${esc(t.verify_hint_am)}</div>` : '',
+    t.needs_clarification && t.clarify_question ? `<div class="bubble assistant">${icon('question')}<p>${esc(t.clarify_question)}</p></div>` : '',
+    t.sensitive && t.sensitive_note_am ? `<div class="bubble assistant warn">${icon('warning')}<p>${esc(t.sensitive_note_am)}</p></div>` : '',
+    t.verify_hint_am ? `<div class="bubble assistant">${icon('camera')}<p>${esc(t.verify_hint_am)}</p></div>` : '',
   ].join('');
   return main + notes;
 }
@@ -519,11 +539,11 @@ async function sendPhoto() {
 }
 
 function showError() {
-  app.innerHTML = `<main class="center"><div class="step-icon">😕</div>
+  app.innerHTML = `<main class="center">${hero('warning', 'caution')}
     <div class="guide"><p class="step-text small">${esc(L(PHRASES.error))}</p>${speakerBtn('data-say="error"')}</div>
     <div class="yesno">
-      <button class="no" data-go="doc" ${aria(PHRASES.again)}>🔁<span>${esc(L(PHRASES.again))}</span></button>
-      <button class="yes" data-go="human" ${aria(HELP)}>🙋<span>${esc(L(HELP))}</span></button>
+      <button class="no" data-go="doc" ${aria(PHRASES.again)}>${icon('again')}<span>${esc(L(PHRASES.again))}</span></button>
+      <button class="yes" data-go="human" ${aria(HELP)}>${icon('help')}<span>${esc(L(HELP))}</span></button>
     </div></main>${bar()}`;
   sayPhrase('error');
 }
@@ -551,7 +571,7 @@ async function bindMic(mode) {
     } catch {
       return showMicFailure(mode, mic);
     }
-    mic.classList.add('on'); mic.textContent = '⏹';
+    mic.classList.add('on'); mic.innerHTML = icon('stop');
     const isProvider = mode === 'talk' && session.talk.phase === 'provider';
     document.getElementById('micText').textContent = isProvider ? 'אני מקשיב. דברו.' : L(PHRASES.listening);
   });
@@ -564,9 +584,9 @@ function showMicFailure(mode, mic) {
   document.getElementById('micText').textContent = isProvider ? 'המיקרופון לא עבד. נסו שוב או הקלידו.' : L(PHRASES.micFail);
   document.getElementById('micFallback').innerHTML = `
     <div class="controls">
-      <button data-mic-retry ${aria(PHRASES.again)}><span class="icon">🔁</span><span>${esc(L(PHRASES.again))}</span></button>
-      <button data-type-instead ${aria(PHRASES.typeIt)}><span class="icon">⌨️</span><span>${esc(L(PHRASES.typeIt))}</span></button>
-      <button data-go="human" ${aria(HELP)}><span class="icon">🙋</span><span>${esc(L(HELP))}</span></button>
+      <button data-mic-retry ${aria(PHRASES.again)}>${icon('again')}<span>${esc(L(PHRASES.again))}</span></button>
+      <button data-type-instead ${aria(PHRASES.typeIt)}>${icon('keyboard')}<span>${esc(L(PHRASES.typeIt))}</span></button>
+      <button data-go="human" ${aria(HELP)}>${icon('help')}<span>${esc(L(HELP))}</span></button>
     </div>`;
   if (!isProvider) sayPhrase('micFail');
 }
@@ -581,7 +601,7 @@ function showTyped(mode, mic) {
     <p class="demo">⌨️ כאן מקלידים. באתר האמיתי מדברים.</p>
     <textarea id="typedQ" rows="3" lang="${isProvider ? 'he' : S.lang}" dir="auto"
       placeholder="${isProvider ? 'כתבו כאן בעברית…' : esc(L(PHRASES.typeIt)) + '…'}"></textarea>
-    <button class="wide primary" aria-label="➤">➤</button>`;
+    <button class="wide primary" aria-label="➤">${icon('send')}</button>`;
   mic.after(form);
   form.onsubmit = e => {
     e.preventDefault();

@@ -5,25 +5,25 @@
 
 // שלוש הפעולות המרכזיות (לפי תכנון "እርዳታ"): לצלם מסמך, לשאול בקול, לבקש עזרה מאדם
 export const MAIN = [
-  { key: 'doc',  icon: '📄', am: 'ደብዳቤ አለኝ', he: 'יש לי מכתב',
+  { key: 'doc',  icon: '📄', ic: 'letter', am: 'ደብዳቤ አለኝ', he: 'יש לי מכתב',
     sayAm: 'ደብዳቤ ወይም ወረቀት አለዎት? ፎቶ ያንሱት፣ በአማርኛ እናስረዳዎታለን', sayHe: 'יש לכם מכתב או דף? צלמו אותו ונסביר באמהרית' },
-  { key: 'talk', icon: '🗣️', am: 'ከሰው ጋር መነጋገር', he: 'לדבר עם אדם',
+  { key: 'talk', icon: '🗣️', ic: 'talk', am: 'ከሰው ጋር መነጋገር', he: 'לדבר עם אדם',
     sayAm: 'ከፋርማሲስት ወይም ከባንክ ሰራተኛ ጋር ይነጋገሩ። እኔ እተረጉማለሁ', sayHe: 'לדבר עם רוקח או פקיד בבנק. אני אתרגם' },
 ];
 
 // "עזרה מאדם שאני סומך עליו" – תמיד באותו מקום, בפס התחתון
-export const HELP = { key: 'human', icon: '🙋', am: 'ሰው ይርዳኝ', he: 'עזרה מאדם',
+export const HELP = { key: 'human', icon: '🙋', ic: 'help', am: 'ሰው ይርዳኝ', he: 'עזרה מאדם',
   sayAm: 'ከሚያምኑት ሰው እርዳታ ያግኙ', sayHe: 'לקבל עזרה מאדם שאתם סומכים עליו' };
 
 // כפתורים נוספים (קטנים יותר) – כלים שבני משפחה מגדירים
 export const EXTRAS = [
-  { key: 'family',    icon: '👨‍👩‍👧', color: 'green',  am: 'ቤተሰብ',  he: 'משפחה',
+  { key: 'family',    icon: '👨‍👩‍👧', ic: 'family', color: 'green',  am: 'ቤተሰብ',  he: 'משפחה',
     sayAm: 'ለቤተሰብ ይደውሉ', sayHe: 'להתקשר למשפחה' },
-  { key: 'emergency', icon: '🚑',     color: 'red',    am: 'አስቸኳይ', he: 'חירום',
+  { key: 'emergency', icon: '🚑', ic: 'emergency', color: 'red',    am: 'አስቸኳይ', he: 'חירום',
     sayAm: 'አስቸኳይ እርዳታ', sayHe: 'עזרה דחופה' },
-  { key: 'meds',      icon: '💊',     color: 'blue',   am: 'መድኃኒት', he: 'תרופות',
+  { key: 'meds',      icon: '💊', ic: 'pill',     color: 'blue',   am: 'መድኃኒት', he: 'תרופות',
     sayAm: 'የእኔ መድኃኒቶች', sayHe: 'התרופות שלי' },
-  { key: 'learn',     icon: '🎓',     color: 'purple', am: 'መማሪያ',  he: 'ללמוד',
+  { key: 'learn',     icon: '🎓', ic: 'learn',     color: 'purple', am: 'መማሪያ',  he: 'ללמוד',
     sayAm: 'ስልኩን መጠቀም ይማሩ', sayHe: 'ללמוד להשתמש בטלפון' },
 ];
 
@@ -31,22 +31,22 @@ export const TILES = [...MAIN, HELP, ...EXTRAS];
 
 // עובדות שחולצו מהמסמך – כל אחת עם אייקון, כדי שגם בלי לקרוא יבינו מה זה
 export const FACTS = [
-  { key: 'event',     icon: '🎉', he: 'מה' },
-  { key: 'date',      icon: '📅', he: 'תאריך' },
-  { key: 'time',      icon: '🕖', he: 'שעה' },
-  { key: 'place',     icon: '📍', he: 'מקום' },
-  { key: 'sender',    icon: '🏢', he: 'מי שלח' },
-  { key: 'amount',    icon: '💰', he: 'סכום' },
-  { key: 'deadline',  icon: '⏰', he: 'עד מתי' },
-  { key: 'action_he', icon: '👉', he: 'מה לעשות' },
+  { key: 'event',     icon: '🎉', ic: 'event', he: 'מה' },
+  { key: 'date',      icon: '📅', ic: 'calendar', he: 'תאריך' },
+  { key: 'time',      icon: '🕖', ic: 'clock', he: 'שעה' },
+  { key: 'place',     icon: '📍', ic: 'pin', he: 'מקום' },
+  { key: 'sender',    icon: '🏢', ic: 'building', he: 'מי שלח' },
+  { key: 'amount',    icon: '💰', ic: 'money', he: 'סכום' },
+  { key: 'deadline',  icon: '⏰', ic: 'alarm', he: 'עד מתי' },
+  { key: 'action_he', icon: '👉', ic: 'todo', he: 'מה לעשות' },
 ];
 
 export const EMERGENCY = [
-  { key: 'mda',    icon: '🚑', number: '101', am: 'አምቡላንስ',   he: 'מד״א',
+  { key: 'mda',    icon: '🚑', ic: 'emergency', number: '101', am: 'አምቡላንስ',   he: 'מד״א',
     sayAm: 'አምቡላንስ', sayHe: 'מגן דוד אדום' },
-  { key: 'police', icon: '👮', number: '100', am: 'ፖሊስ',      he: 'משטרה',
+  { key: 'police', icon: '👮', ic: 'shield', number: '100', am: 'ፖሊስ',      he: 'משטרה',
     sayAm: 'ፖሊስ', sayHe: 'משטרה' },
-  { key: 'fire',   icon: '🚒', number: '102', am: 'እሳት አደጋ', he: 'כיבוי אש',
+  { key: 'fire',   icon: '🚒', ic: 'flame', number: '102', am: 'እሳት አደጋ', he: 'כיבוי אש',
     sayAm: 'የእሳት አደጋ መከላከያ', sayHe: 'כבאות' },
 ];
 
@@ -95,6 +95,8 @@ export const PHRASES = {
   helpSetup: { am: 'ገና የሚረዳ ሰው አልተመረጠም። አጠገብዎ ያለ ሰው እንዲያዘጋጅልዎ ይጠይቁ።', he: 'עדיין לא נבחר עוזר. בקשו ממי שלידכם להגדיר אותו.' },
   shareDoc:  { am: 'የደብዳቤውን ፎቶ ልላክ?', he: 'לשלוח את תמונת המכתב?' },
   home:      { am: 'ቤት', he: 'בית' },
+  hello:     { am: 'ሰላም', he: 'שלום' },
+  more:      { am: 'ተጨማሪ', he: 'עוד' },
   speakerBtn: { am: 'ያዳምጡ', he: 'להשמיע' },
   yes:       { am: 'አዎ', he: 'כן' },
   no:        { am: 'አይ', he: 'לא' },

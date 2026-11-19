@@ -1,152 +1,198 @@
-/* עיצוב למבוגרים: כפתורים גדולים, צבע מוביל אחד לפעולה הראשית, אדום רק לחירום ולסכנה,
-   הנחיה אחת בכל פעם, ופס "בית / עזרה מאדם" תמיד באותו מקום למטה. */
+/* እርዳታ – עיצוב למבוגרים.
+   רקע בגוון כותנה של נטלה (הצעיף האתיופי), צבע מוביל אחד (ירוק עמוק) לפעולה הראשית,
+   פס "ጥበብ" (טִבֵּב – רקמת השוליים של השמלה המסורתית) כחתימה, אדום רק לחירום ולסכנה.
+   כותרת בכל מסך, הנחיה אחת בכל פעם, ופס "בית / עזרה מאדם" תמיד למטה. */
 :root {
   color-scheme: light;
-  --bg: #f7f4ee;          /* רקע חם ובהיר */
-  --card: #ffffff;
-  --ink: #1d1d1b;
-  --muted: #625d53;
-  --line: #e4ddd0;
-  --accent: #1d6b48;      /* הצבע המוביל – הפעולה הראשית */
-  --accent-ink: #ffffff;
-  --accent-soft: #e3efe8;
-  --danger: #b3261e;      /* חירום / סכנה בלבד */
-  --caution: #f2c14e;     /* "כדאי לבדוק עם אדם" */
-  --wa: #1fa855;
-  --listen: #c2410c;      /* מקליט עכשיו */
+  --bg: #F8F6F1;
+  --card: #FFFFFF;
+  --ink: #18211E;
+  --muted: #5C635F;
+  --line: #E3DFD5;
+  --accent: #0F5C4A;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E3EFEA;
+  --gold: #C8962E;
+  --indigo: #2F3E8F;
+  --indigo-soft: #E8EBF7;
+  --danger: #B42318;
+  --danger-soft: #FCE8E6;
+  --caution: #F4C84A;
+  --caution-soft: #FDF3D6;
+  --wa: #128C4A;
+  --listen: #C2410C;
   --r: 26px;
-  --bar-h: 92px;
+  --font: "Noto Sans Ethiopic", "Noto Sans Hebrew", "Abyssinica SIL", "Nyala", system-ui, sans-serif;
+  --tibeb: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='14'%3E%3Cpath d='M0 7 8 1l8 6 8-6 8 6' fill='none' stroke='%230F5C4A' stroke-width='2'/%3E%3Cpath d='M0 7l8 6 8-6 8 6 8-6' fill='none' stroke='%23C8962E' stroke-width='2'/%3E%3Crect x='6.4' y='5.4' width='3.2' height='3.2' transform='rotate(45 8 7)' fill='%232F3E8F'/%3E%3Crect x='22.4' y='5.4' width='3.2' height='3.2' transform='rotate(45 24 7)' fill='%23C8962E'/%3E%3C/svg%3E");
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); }
 body {
-  font-family: "Noto Sans Ethiopic", "Abyssinica SIL", "Nyala", system-ui, sans-serif;
-  font-size: 22px; min-height: 100dvh;
-  padding: max(16px, env(safe-area-inset-top)) 16px calc(var(--bar-h) + 24px + env(safe-area-inset-bottom));
+  font-family: var(--font); font-size: 22px; line-height: 1.45; min-height: 100dvh;
+  padding: max(14px, env(safe-area-inset-top)) 16px calc(112px + env(safe-area-inset-bottom));
   user-select: none;
 }
+h1, h2, p { margin: 0; }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; touch-action: manipulation; }
-button:active { transform: scale(.97); }
+button:active { transform: scale(.98); }
 button:disabled { opacity: .35; }
 button:focus-visible, a:focus-visible, label:focus-within { outline: 4px solid #2563eb; outline-offset: 3px; }
-img { display: block; }
+img { display: block; max-width: 100%; }
 [hidden] { display: none !important; }
+.ic { width: 1em; height: 1em; flex: none; }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
 
-/* תפקידים – בכל המסכים אותם צבעים */
+/* תפקידים – אותם צבעים בכל המסכים */
 .primary { background: var(--accent); color: var(--accent-ink); }
 .secondary { background: var(--card); color: var(--ink); border: 2px solid var(--line); }
 .danger { background: var(--danger); color: #fff; }
 .caution { background: var(--caution); color: var(--ink); }
 .wa { background: var(--wa); color: #fff; }
 .help { background: var(--card); color: var(--accent); border: 3px solid var(--accent); }
-.lift { box-shadow: 0 5px 0 rgba(0,0,0,.16); }
+
+/* פס הטִבֵּב */
+.tibeb { height: 14px; margin: 12px 0 18px; background: var(--tibeb) repeat-x center / auto 14px; border-radius: 3px; opacity: .9; }
+
+/* ---------- כותרות ---------- */
+.titles h1 { font-size: 32px; font-weight: 800; line-height: 1.2; letter-spacing: .01em; }
+.titles small { display: block; font-size: 16px; color: var(--muted); margin-top: 2px; }
+.hello { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 6px; }
+.hello .titles h1 { font-size: 40px; }
+.screen-head { display: flex; align-items: center; gap: 14px; }
+.screen-head .badge {
+  width: 58px; height: 58px; border-radius: 18px; display: grid; place-items: center; flex: none;
+  background: var(--accent); color: #fff; font-size: 32px;
+}
+.screen-head .titles h1 { font-size: 28px; }
+
+.speaker {
+  width: 60px; height: 60px; border-radius: 50%; font-size: 28px; flex: none; display: grid; place-items: center;
+  background: var(--card); color: var(--accent); border: 2px solid var(--line);
+}
+.big-speaker { width: 76px; height: 76px; font-size: 36px; border: 3px solid var(--accent); }
 
 /* ---------- בית ---------- */
-.top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-.speaker {
-  width: 64px; height: 64px; border-radius: 50%; font-size: 30px; flex: none;
-  background: var(--card); border: 2px solid var(--line);
-}
-.big-speaker { width: 76px; height: 76px; font-size: 36px; }
-.gear { width: 52px; height: 52px; border-radius: 50%; background: #ebe5d9; font-size: 24px; opacity: .55; position: relative; }
-.gear .ring { position: absolute; inset: 0; border-radius: 50%; border: 4px solid var(--accent); clip-path: inset(100% 0 0 0); }
-.gear.holding .ring { transition: clip-path 3s linear; clip-path: inset(0 0 0 0); }
-
 .main-actions { display: flex; flex-direction: column; gap: 16px; }
 .big {
-  display: flex; align-items: center; gap: 18px; padding: 20px 22px; min-height: 132px;
-  border-radius: var(--r); text-align: start; box-shadow: 0 6px 0 rgba(0,0,0,.18);
+  display: flex; align-items: center; gap: 16px; padding: 18px; min-height: 128px; width: 100%;
+  border-radius: var(--r); text-align: start; background: var(--accent); color: #fff;
+  box-shadow: 0 10px 22px -12px rgba(15, 92, 74, .7);
+  position: relative; overflow: hidden;
 }
-.big .icon { font-size: 72px; line-height: 1; }
-.big .txt { display: flex; flex-direction: column; gap: 2px; }
-.big .lbl { font-size: 32px; font-weight: 800; }
-.big .sub { font-size: 17px; opacity: .85; }
-.extras { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+.big::after { /* קצה טִבֵּב דק בתחתית הכרטיס */
+  content: ""; position: absolute; inset: auto 0 0 0; height: 8px; background: var(--tibeb) repeat-x center / auto 8px; opacity: .55;
+}
+.big-ic {
+  width: 84px; height: 84px; border-radius: 22px; display: grid; place-items: center; flex: none;
+  background: #fff; color: var(--accent); font-size: 50px;
+}
+.big .txt { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.big .lbl { font-size: 30px; font-weight: 800; line-height: 1.2; }
+.big .sub { font-size: 16px; opacity: .85; }
+.big .go { font-size: 30px; opacity: .7; }
+[dir="rtl"] .big .go { transform: scaleX(-1); }
+.section-label { margin: 24px 4px 10px; font-size: 18px; font-weight: 700; color: var(--muted); }
+.extras { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .extra {
-  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px;
-  border-radius: 20px; background: var(--card); border: 2px solid var(--line);
+  display: flex; align-items: center; gap: 12px; padding: 14px; min-height: 84px;
+  border-radius: 22px; background: var(--card); border: 2px solid var(--line); text-align: start;
 }
-.extra.danger { border-color: var(--danger); }
-.extra .icon { font-size: 38px; line-height: 1; }
-.extra .lbl { font-size: 14px; font-weight: 700; }
+.ex-ic {
+  width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; flex: none;
+  background: var(--accent-soft); color: var(--accent); font-size: 30px;
+}
+.extra .lbl { font-size: 20px; font-weight: 800; }
+.extra.danger-outline { border-color: #efc4bf; }
+.extra.danger-outline .ex-ic { background: var(--danger-soft); color: var(--danger); }
+.gear {
+  display: grid; place-items: center; width: 48px; height: 48px; margin: 22px auto 0; border-radius: 50%;
+  color: var(--muted); font-size: 24px; opacity: .55; position: relative;
+}
+.gear .ring { position: absolute; inset: 0; border-radius: 50%; border: 4px solid var(--accent); clip-path: inset(100% 0 0 0); }
+.gear.holding .ring { transition: clip-path 3s linear; clip-path: inset(0 0 0 0); }
 
 /* ---------- הפס התחתון: בית + עזרה מאדם ---------- */
 .bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; gap: 12px;
-  padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  background: color-mix(in srgb, var(--bg) 92%, transparent); border-top: 1px solid var(--line);
-  backdrop-filter: blur(6px);
+  padding: 12px max(16px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: color-mix(in srgb, var(--bg) 94%, transparent); border-top: 1px solid var(--line);
+  backdrop-filter: blur(8px);
 }
-.bar button { height: 72px; border-radius: 22px; font-size: 22px; font-weight: 700; }
-.bar-home { width: 92px; flex: none; background: var(--card); border: 2px solid var(--line); font-size: 38px; }
-.bar-help { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
-  background: var(--card); color: var(--accent); border: 3px solid var(--accent); }
-.bar-help .icon { font-size: 36px; }
+.bar button { height: 72px; border-radius: 22px; font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.bar-home { width: 88px; flex: none; background: var(--card); border: 2px solid var(--line); font-size: 34px; color: var(--ink); }
+.bar-help { flex: 1; background: var(--card); color: var(--accent); border: 3px solid var(--accent); }
+.bar-help .ic { font-size: 34px; }
 
 /* ---------- רכיבים משותפים ---------- */
 .center { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; }
+.hero {
+  width: 132px; height: 132px; border-radius: 40px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); font-size: 72px; margin-top: 6px;
+}
+.hero.caution { background: var(--caution-soft); color: #8a5a00; }
 .guide {
   display: flex; align-items: center; gap: 12px; width: 100%;
-  background: var(--card); border-radius: 22px; padding: 12px 14px; text-align: start;
+  background: var(--card); border-radius: 22px; padding: 14px 16px; text-align: start;
+  box-shadow: 0 1px 0 var(--line);
 }
 .guide .step-text { flex: 1; }
 .step-icon { font-size: 110px; line-height: 1.1; }
-.step-text { font-size: 28px; font-weight: 700; line-height: 1.5; margin: 0; }
-.step-text.small { font-size: 23px; font-weight: 600; }
+.step-text { font-size: 28px; font-weight: 700; line-height: 1.5; }
+.step-text.small { font-size: 22px; font-weight: 600; }
 .big-action {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; min-height: 200px; border-radius: var(--r); box-shadow: 0 6px 0 rgba(0,0,0,.18);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 190px; border-radius: var(--r); box-shadow: 0 10px 22px -12px rgba(15, 92, 74, .7);
 }
-.big-action .icon { font-size: 96px; line-height: 1; }
-.big-action .lbl { font-size: 30px; font-weight: 800; }
+.ba-ic { font-size: 84px; display: grid; }
+.big-action .lbl { font-size: 28px; font-weight: 800; }
 .wide {
   display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%;
-  min-height: 76px; padding: 10px 18px; border-radius: 22px; font-size: 24px; font-weight: 700;
+  min-height: 76px; padding: 10px 18px; border-radius: 22px; font-size: 22px; font-weight: 700;
 }
-.wide .icon { font-size: 36px; }
-.thumb { max-width: 60%; max-height: 32vh; border-radius: 16px; border: 3px solid var(--line); }
+.wide .ic { font-size: 32px; }
+.thumb { max-width: 62%; max-height: 30vh; border-radius: 18px; border: 3px solid var(--line); background: var(--card); }
 
 /* כן / לא – באותו גודל, כי שתי התשובות לגיטימיות */
 .yesno { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; }
 .yesno button {
-  height: 110px; border-radius: var(--r); font-size: 44px; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 2px; box-shadow: 0 5px 0 rgba(0,0,0,.14);
+  height: 112px; border-radius: var(--r); font-size: 48px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
 }
-.yesno span { font-size: 20px; font-weight: 700; }
+.yesno span { font-size: 20px; font-weight: 800; }
 .yesno .yes { background: var(--accent); color: var(--accent-ink); }
-.yesno .no { background: var(--card); border: 2px solid var(--line); }
+.yesno .no { background: var(--card); border: 2px solid var(--line); color: var(--ink); }
 
 /* שורת פעולות: שוב / לאט יותר / שאלה */
 .controls { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; width: 100%; }
 .controls button {
-  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px;
-  border-radius: 20px; background: var(--card); border: 2px solid var(--line); font-size: 16px; font-weight: 700;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px;
+  border-radius: 20px; background: var(--card); border: 2px solid var(--line); font-size: 16px; font-weight: 800; color: var(--accent);
 }
-.controls .icon { font-size: 34px; }
+.controls .ic { font-size: 34px; }
+.controls span { color: var(--ink); }
 
-.demo { font-family: system-ui, sans-serif; font-size: 15px; text-align: center; background: #eee8f7; border-radius: 12px; padding: 6px 10px; margin: 0; }
-.empty { text-align: center; font-size: 26px; line-height: 1.6; margin-top: 10vh; }
+.demo { font-family: system-ui, sans-serif; font-size: 14px; text-align: center; color: #4a3d7a; background: #EEEAF8; border-radius: 12px; padding: 6px 10px; }
 
 /* ---------- עבודה ---------- */
-.working { margin-top: 16vh; }
+.working { margin-top: 18vh; }
 .spinner {
-  width: 110px; height: 110px; border-radius: 50%; border: 12px solid var(--line); border-top-color: var(--accent);
+  width: 104px; height: 104px; border-radius: 50%; border: 12px solid var(--line); border-top-color: var(--accent);
   animation: spin 1s linear infinite;
 }
 .spinner.small { width: 56px; height: 56px; border-width: 7px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes pulse { 50% { box-shadow: 0 0 0 22px color-mix(in srgb, var(--listen) 25%, transparent); } }
+@keyframes pulse { 50% { box-shadow: 0 0 0 22px color-mix(in srgb, var(--listen) 22%, transparent); } }
 
 /* ---------- מיקרופון ---------- */
-.about { font-size: 24px; background: var(--card); border-radius: 18px; padding: 10px 18px; }
+.about { display: flex; align-items: center; gap: 10px; font-size: 22px; background: var(--card); border-radius: 18px; padding: 10px 18px; color: var(--accent); }
+.about span { color: var(--ink); }
 .mic {
-  width: 58vw; max-width: 250px; aspect-ratio: 1; border-radius: 50%; font-size: 100px;
-  background: var(--accent); color: #fff; box-shadow: 0 8px 0 rgba(0,0,0,.2);
+  width: 56vw; max-width: 236px; aspect-ratio: 1; border-radius: 50%; font-size: 96px; display: grid; place-items: center;
+  background: var(--accent); color: #fff; box-shadow: 0 14px 28px -14px rgba(15, 92, 74, .8);
 }
 .mic.on { background: var(--listen); animation: pulse 1.2s ease-in-out infinite; }
-.mic.failed { background: #9a948a; }
-.mic.provider { background: #1e4f8a; }
+.mic.failed { background: #9a948a; box-shadow: none; }
+.mic.provider { background: var(--indigo); }
 #micFallback { width: 100%; }
 .typed-ask { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .typed-ask textarea {
@@ -156,95 +202,111 @@ img { display: block; }
 
 /* ---------- תשובה ---------- */
 .result { display: flex; flex-direction: column; gap: 14px; }
-.warn { padding: 16px; border-radius: 20px; font-size: 22px; font-weight: 700; text-align: start; }
-.play { height: 150px; border-radius: var(--r); font-size: 88px; box-shadow: 0 6px 0 rgba(0,0,0,.18); }
+.result .tibeb { margin: 0; }
+.warn { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 20px; font-size: 21px; font-weight: 700; text-align: start; }
+.warn .ic { font-size: 36px; }
+.play {
+  height: 140px; border-radius: var(--r); font-size: 80px; display: grid; place-items: center;
+  box-shadow: 0 10px 22px -12px rgba(15, 92, 74, .7);
+}
 .facts { display: flex; flex-direction: column; gap: 8px; }
 .fact {
-  display: flex; align-items: center; gap: 14px; background: var(--card); border-radius: 18px; padding: 10px 14px;
-  font-family: system-ui, sans-serif; font-size: 21px; font-weight: 600; direction: rtl;
+  display: flex; align-items: center; gap: 14px; background: var(--card); border-radius: 18px; padding: 12px 14px;
+  font-family: "Noto Sans Hebrew", system-ui, sans-serif; font-size: 21px; font-weight: 600; direction: rtl;
 }
-.fact.muted { background: #fbf3dc; }
-.fact .icon { font-size: 36px; }
+.fact.muted { background: var(--caution-soft); }
+.f-ic {
+  width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; flex: none;
+  background: var(--accent-soft); color: var(--accent); font-size: 28px;
+}
+.fact.muted .f-ic { background: #fff; color: #8a5a00; }
 .fact small { display: block; font-size: 14px; font-weight: 400; color: var(--muted); }
-.fulltext { font-family: system-ui, sans-serif; font-size: 16px; direction: rtl; background: var(--card); border-radius: 14px; padding: 10px 14px; }
+.fulltext { font-family: "Noto Sans Hebrew", system-ui, sans-serif; font-size: 16px; direction: rtl; background: var(--card); border-radius: 14px; padding: 10px 14px; }
 .fulltext summary { cursor: pointer; color: var(--muted); }
 
 /* ---------- מתורגמן ---------- */
 .talk { display: flex; flex-direction: column; gap: 14px; }
-.turns { display: flex; flex-direction: column; gap: 10px; max-height: 42vh; overflow-y: auto; }
-.talk-hint { font-size: 22px; background: var(--card); border-radius: 18px; padding: 14px; margin: 0; }
-.bubble { display: flex; gap: 10px; padding: 12px 14px; border-radius: 18px; background: var(--card); font-size: 18px; }
-.bubble .who { font-size: 32px; }
-.bubble p { margin: 0; }
-.bubble .said { color: var(--muted); font-size: 16px; }
-.bubble .translated { font-size: 24px; font-weight: 700; }
-.from-user { border-inline-start: 6px solid var(--accent); }
-.from-provider { border-inline-start: 6px solid #1e4f8a; }
-.bubble.assistant { background: var(--accent-soft); font-size: 19px; }
-.bubble.assistant.warn { background: #fde7e4; border: 2px solid var(--danger); }
+.turns { display: flex; flex-direction: column; gap: 10px; max-height: 40vh; overflow-y: auto; }
+.talk-hint { font-size: 21px; background: var(--card); border-radius: 18px; padding: 14px; }
+.bubble { display: flex; gap: 12px; padding: 12px 14px; border-radius: 18px; background: var(--card); font-size: 18px; align-items: flex-start; }
+.bubble .who { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none; font-size: 22px; }
+.from-user .who { background: var(--accent-soft); color: var(--accent); }
+.from-provider .who { background: var(--indigo-soft); color: var(--indigo); }
+.bubble .said { color: var(--muted); font-size: 15px; }
+.bubble .translated { font-size: 23px; font-weight: 700; }
+.from-user { border-inline-start: 5px solid var(--accent); }
+.from-provider { border-inline-start: 5px solid var(--indigo); }
+.bubble.assistant { background: var(--accent-soft); font-size: 19px; color: var(--ink); }
+.bubble.assistant .ic { font-size: 28px; color: var(--accent); }
+.bubble.assistant.warn { background: var(--danger-soft); border: 2px solid var(--danger); }
+.bubble.assistant.warn .ic { color: var(--danger); }
 .talk-panel { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
-.talk-panel .mic { width: 44vw; max-width: 190px; font-size: 76px; }
-.talk-panel.provider { background: #e7eef8; border-radius: var(--r); padding: 14px; font-family: system-ui, sans-serif; }
-.talk-panel.provider .step-text { font-size: 26px; font-weight: 800; color: #1e4f8a; }
-.handover { margin: 0; font-size: 18px; }
+.talk-panel .mic { width: 42vw; max-width: 180px; font-size: 72px; }
+.talk-panel.provider { background: var(--indigo-soft); border-radius: var(--r); padding: 16px; font-family: "Noto Sans Hebrew", system-ui, sans-serif; }
+.talk-panel.provider .step-text { font-size: 26px; font-weight: 800; color: var(--indigo); }
+.handover { display: flex; align-items: center; gap: 8px; font-size: 17px; color: var(--muted); font-family: var(--font); }
 
 /* ---------- עזרה / משפחה / רשימות ---------- */
 .list { display: flex; flex-direction: column; gap: 14px; }
 .row {
-  display: flex; align-items: center; gap: 16px; padding: 14px 20px; min-height: 100px; width: 100%;
-  border-radius: var(--r); text-align: start; box-shadow: 0 5px 0 rgba(0,0,0,.14);
+  display: flex; align-items: center; gap: 16px; padding: 14px 18px; min-height: 96px; width: 100%;
+  border-radius: var(--r); text-align: start;
 }
-.row .icon { font-size: 50px; width: 70px; display: grid; place-items: center; }
-.row .lbl { flex: 1; font-size: 26px; font-weight: 700; }
+.r-ic {
+  width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; flex: none;
+  background: rgba(255, 255, 255, .18); font-size: 34px;
+}
+.row.secondary .r-ic { background: var(--accent-soft); color: var(--accent); }
+.row .lbl { flex: 1; font-size: 25px; font-weight: 800; }
 .row .lbl small { display: block; font-size: 16px; font-weight: 400; opacity: .85; }
 .row .num { font-size: 36px; font-weight: 800; direction: ltr; }
 .quick-setup {
-  display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 14px; border-radius: 20px;
-  background: var(--card); border: 2px dashed var(--line); font-family: system-ui, sans-serif; text-align: start; user-select: text;
+  display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 16px; border-radius: 22px;
+  background: var(--card); border: 2px dashed var(--line); font-family: "Noto Sans Hebrew", system-ui, sans-serif; text-align: start; user-select: text;
 }
-.quick-setup .hint { margin: 0; color: var(--muted); font-size: 17px; }
+.quick-setup .hint { color: var(--muted); font-size: 17px; }
 .quick-setup input { font: inherit; font-size: 20px; padding: 12px; border-radius: 12px; border: 2px solid var(--line); width: 100%; }
 .file { cursor: pointer; }
 
-.people { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.people { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .person { background: var(--card); border-radius: var(--r); padding: 10px; }
 .face { display: block; width: 100%; padding: 0; }
 .face img, .face .initial { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 20px; }
-.face .initial { display: grid; place-items: center; background: var(--accent-soft); font-size: 80px; font-weight: 700; }
-.face .name { display: block; margin-top: 6px; font-size: 22px; font-weight: 700; text-align: center; }
+.face .initial { display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 76px; font-weight: 800; }
+.face .name { display: block; margin-top: 6px; font-size: 22px; font-weight: 800; text-align: center; }
 .actions { display: flex; gap: 8px; margin-top: 8px; }
-.act { flex: 1; height: 64px; border-radius: 18px; font-size: 32px; }
+.act { flex: 1; height: 60px; border-radius: 18px; font-size: 30px; display: grid; place-items: center; }
 
 .time { background: var(--card); border-radius: var(--r); padding: 12px; }
-.time.now { outline: 6px solid var(--caution); }
-.time-head { display: flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 700; }
-.time-head .icon { font-size: 46px; }
+.time.now { outline: 5px solid var(--caution); }
+.time-head { display: flex; align-items: center; gap: 10px; font-size: 26px; font-weight: 800; }
+.time-head .icon { font-size: 44px; }
 .pills { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
 .pill { background: var(--accent-soft); border-radius: 20px; padding: 10px; display: flex; flex-direction: column; align-items: center; }
 .pill img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; }
-.pill .icon { font-size: 60px; }
+.p-ic { font-size: 56px; color: var(--accent); display: grid; }
 .pill .name { font-size: 18px; margin-top: 4px; }
 
 /* ---------- למידה ---------- */
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .tile {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 16px 8px;
-  min-height: 170px; border-radius: var(--r); background: var(--card); border: 2px solid var(--line);
+  min-height: 164px; border-radius: var(--r); background: var(--card); border: 2px solid var(--line);
 }
-.tile .icon { font-size: 64px; line-height: 1; }
-.tile .lbl { font-size: 24px; font-weight: 800; text-align: center; }
+.tile .icon { font-size: 60px; line-height: 1; }
+.tile .lbl { font-size: 22px; font-weight: 800; text-align: center; }
 .tile .sub { font-size: 15px; color: var(--muted); }
 .dots { display: flex; gap: 10px; }
 .dots span { width: 18px; height: 18px; border-radius: 50%; background: var(--line); }
 .dots span.on { background: var(--accent); }
 
 /* ---------- הגדרות (לבני המשפחה, טקסט רגיל) ---------- */
-.settings { font-family: system-ui, sans-serif; font-size: 17px; user-select: text; }
+.settings { font-family: "Noto Sans Hebrew", system-ui, sans-serif; font-size: 17px; user-select: text; }
 .settings header { display: flex; justify-content: space-between; align-items: center; }
-.settings h1 { font-size: 24px; margin: 0; }
+.settings h1 { font-size: 24px; }
 .settings h2 { font-size: 19px; margin: 0 0 6px; }
 .settings section { background: var(--card); border-radius: 16px; padding: 14px; margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
-.settings .hint { color: var(--muted); font-size: 15px; margin: 0; }
+.settings .hint { color: var(--muted); font-size: 15px; }
 .settings input, .settings select { font: inherit; padding: 10px; border: 1px solid #cfc6b4; border-radius: 10px; width: 100%; }
 .settings .add { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .settings .add > button, .settings .file {
@@ -263,6 +325,6 @@ img { display: block; }
 .mini.danger { background: #f3d6d3; color: var(--ink); }
 
 @media (min-width: 700px) {
-  body { max-width: 640px; margin: 0 auto; }
-  .bar { max-width: 640px; margin: 0 auto; }
+  body { max-width: 620px; margin: 0 auto; }
+  .bar { max-width: 620px; margin: 0 auto; }
 }
