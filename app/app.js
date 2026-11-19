@@ -1,4 +1,4 @@
-import { MAIN, HELP, EXTRAS, TILES, FACTS, EMERGENCY, TIMES, PHRASES, LESSONS } from './content.js';
+import { MAIN, HELP, EXTRAS, TILES, FACTS, EMERGENCY, TIMES, PHRASES, LESSONS, WORLD_OF } from './content.js';
 import { loadSettings, saveSettings, newId, putBlob, getBlob, delBlob, resizeImage } from './store.js';
 import { say, sayThen, startRecording, stop } from './voice.js';
 import { startWavRecording } from './recorder.js';
@@ -18,6 +18,7 @@ const session = {
   recorder: null,
   typed: false,      // המשתמש ביקש להקליד במקום לדבר
   talk: { turns: [], phase: 'user', busy: false, introduced: false, last: [] },
+  world: 'home',     // באיזה "עולם" צבע אנחנו (מכתב, שיחה…) – גם במסכי ביניים כמו המתנה
 };
 
 // ---------- עזרים ----------
@@ -51,7 +52,7 @@ function route() {
 function bar({ home = true, help = true } = {}) {
   return `<nav class="bar">
     ${home ? `<button class="bar-home" data-go="home" ${aria(PHRASES.home)}>${icon('home')}</button>` : ''}
-    ${help ? `<button class="bar-help" data-go="human" ${aria(HELP)}>${icon('help')}<span>${esc(L(HELP))}</span></button>` : ''}
+    ${help ? `<button class="bar-help" data-world="help" data-go="human" ${aria(HELP)}>${icon('help')}<span>${esc(L(HELP))}</span></button>` : ''}
   </nav>`;
 }
 const speakerBtn = (attr, cls = '') => `<button class="speaker ${cls}" ${attr} ${aria(PHRASES.speakerBtn)}>${icon('speaker')}</button>`;
@@ -89,7 +90,7 @@ const screens = {
       <div class="tibeb" aria-hidden="true"></div>
       <main class="main-actions">
         ${MAIN.map(t => `
-          <button class="big" data-tile="${t.key}" ${aria(t)}>
+          <button class="big" data-world="${WORLD_OF[t.key]}" data-tile="${t.key}" ${aria(t)}>
             <span class="big-ic">${icon(t.ic)}</span>
             <span class="txt"><span class="lbl">${esc(L(t))}</span><span class="sub" lang="he">${esc(sub(t))}</span></span>
             <span class="go">${icon('chevron')}</span>
@@ -98,7 +99,7 @@ const screens = {
       <p class="section-label">${esc(L(PHRASES.more))}</p>
       <nav class="extras">
         ${EXTRAS.map(t => `
-          <button class="extra ${t.key === 'emergency' ? 'danger-outline' : ''}" data-tile="${t.key}" ${aria(t)}>
+          <button class="extra" data-world="${WORLD_OF[t.key]}" data-tile="${t.key}" ${aria(t)}>
             <span class="ex-ic">${icon(t.ic)}</span><span class="lbl">${esc(L(t))}</span>
           </button>`).join('')}
       </nav>
@@ -185,10 +186,10 @@ const screens = {
     const facts = isDoc ? FACTS.filter(f => r[f.key]).map(f => {
       let v = r[f.key];
       if (f.key === 'date' || f.key === 'deadline') v = formatDate(v, f.key === 'date' ? r.weekday_he : '');
-      return `<div class="fact"><span class="f-ic">${icon(f.ic)}</span><span><small>${f.he}</small>${esc(v)}</span></div>`;
+      return `<div class="fact" data-tone="${f.tone}"><span class="f-ic">${icon(f.ic)}</span><span><small>${f.he}</small>${esc(v)}</span></div>`;
     }).join('') : `<div class="fact"><span class="f-ic">${icon('question')}</span><span>${esc(r.question_he || '')}</span></div>`;
     const missing = isDoc && r.missing?.length
-      ? `<div class="fact muted"><span class="f-ic">${icon('warning')}</span><span><small>לא כתוב במסמך</small>${esc(r.missing.join(', '))}</span></div>` : '';
+      ? `<div class="fact muted" data-tone="yellow"><span class="f-ic">${icon('warning')}</span><span><small>לא כתוב במסמך</small>${esc(r.missing.join(', '))}</span></div>` : '';
     const warn = r.scam_warning ? 'scam' : r.emergency ? 'emergency' : r.review_required ? 'review' : '';
     return `
       <main class="result">
@@ -241,7 +242,7 @@ const screens = {
         <div id="micFallback"></div>
       </div>`;
     } else {
-      panel = `<div class="talk-panel provider" lang="he" dir="rtl">
+      panel = `<div class="talk-panel provider" data-world="provider" lang="he" dir="rtl">
         <p class="handover" lang="am">${icon('arrow')} ${esc(PHRASES.giveToProvider.am)}</p>
         <button class="mic provider" id="mic" aria-label="${esc(PHRASES.giveToProvider.he)}">${icon('mic')}</button>
         <p class="step-text small" id="micText" role="status">${esc(PHRASES.giveToProvider.he)}</p>
@@ -282,9 +283,9 @@ const screens = {
       ${head('help', HELP)}
       <main class="list">
         <button class="row primary" data-helpcall><span class="r-ic">${icon('phone')}</span><span class="lbl">${name}</span></button>
-        <button class="row wa" data-helpwa><span class="r-ic">${icon('chat')}</span><span class="lbl">WhatsApp · ${name}</span></button>
+        <button class="row primary" data-tone="mint" data-helpwa><span class="r-ic">${icon('chat')}</span><span class="lbl">WhatsApp · ${name}</span></button>
         ${session.photo ? `<button class="row secondary" data-go="human" data-arg="share"><span class="r-ic">${icon('send')}</span><span class="lbl">${esc(L(PHRASES.shareDoc))}</span></button>` : ''}
-        <button class="row danger" data-emergency="mda"><span class="r-ic">${icon('emergency')}</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
+        <button class="row primary" data-tone="red" data-emergency="mda"><span class="r-ic">${icon('emergency')}</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
       </main>
       ${bar({ help: false })}`;
   },
@@ -302,7 +303,7 @@ const screens = {
             </button>
             <div class="actions">
               <button class="act primary" data-call="${c.id}" ${aria(PHRASES.call)}>${icon('phone')}</button>
-              <button class="act wa" data-wa="${c.id}" aria-label="WhatsApp">${icon('chat')}</button>
+              <button class="act primary" data-tone="mint" data-wa="${c.id}" aria-label="WhatsApp">${icon('chat')}</button>
             </div>
           </div>`).join('')}
       </main>
@@ -314,7 +315,7 @@ const screens = {
       ${head('emergency', EXTRAS[1])}
       <main class="list">
         ${EMERGENCY.map(e => `
-          <button class="row danger" data-emergency="${e.key}" ${aria(e)}>
+          <button class="row primary" data-tone="${e.tone}" data-emergency="${e.key}" ${aria(e)}>
             <span class="r-ic">${icon(e.ic)}</span>
             <span class="lbl">${esc(L(e))}<small>${esc(sub(e))}</small></span>
             <span class="num">${e.number}</span>
@@ -356,7 +357,7 @@ const screens = {
       ${head('learn', EXTRAS[3])}
       <main class="grid">
         ${LESSONS.map(l => `
-          <button class="tile" data-lesson="${l.key}" ${aria(l)}>
+          <button class="tile" data-tone="${['blue', 'mint', 'purple', 'red'][LESSONS.indexOf(l) % 4]}" data-lesson="${l.key}" ${aria(l)}>
             <span class="icon">${l.icon}</span>
             <span class="lbl">${esc(L(l))}</span>
             <span class="sub">${esc(sub(l))}</span>
@@ -404,7 +405,7 @@ function helperSetupHtml() {
         <input id="qsPhone" name="phone" type="tel" placeholder="טלפון 05X-XXXXXXX" required dir="ltr">
         <button class="wide primary">${icon('check')}<span>שמירה</span></button>
       </form>
-      <button class="row danger" data-emergency="mda"><span class="r-ic">${icon('emergency')}</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
+      <button class="row primary" data-tone="red" data-emergency="mda"><span class="r-ic">${icon('emergency')}</span><span class="lbl">${esc(L(EMERGENCY[0]))}</span><span class="num">101</span></button>
     </main>
     ${bar({ help: false })}`;
 }
@@ -428,7 +429,7 @@ function contactSetupHtml() {
 function turnHtml(t) {
   const fromUser = t.speaker === 'user';
   const main = `<div class="bubble ${fromUser ? 'from-user' : 'from-provider'}">
-      <span class="who">${icon(fromUser ? 'mic' : 'building')}</span>
+      <span class="who" data-world="${fromUser ? 'talk' : 'provider'}">${icon(fromUser ? 'mic' : 'building')}</span>
       <div><p class="said" lang="${fromUser ? 'am' : 'he'}">${esc(t.original)}</p>
       <p class="translated" lang="${fromUser ? 'he' : 'am'}" dir="${fromUser ? 'rtl' : 'ltr'}">${esc(t.translation)}</p></div>
     </div>`;
@@ -495,6 +496,10 @@ function render() {
   const [screen, arg] = route();
   if (screen !== 'ask' && screen !== 'talk' && session.recorder) { session.recorder.stop(); session.recorder = null; }
   stop(); stopSpeaking();
+  if (WORLD_OF[screen]) session.world = WORLD_OF[screen];
+  else if (screen === 'home' || screen === 'setup') session.world = 'home';
+  else if (screen === 'consent') session.world = arg === 'talk' ? 'talk' : 'letter';
+  document.body.dataset.world = session.world;
   const fn = screens[screen] || screens.home;
   app.innerHTML = fn(arg);
   document.documentElement.lang = screen === 'setup' ? 'he' : S.lang;

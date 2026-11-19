@@ -29,24 +29,28 @@ export const EXTRAS = [
 
 export const TILES = [...MAIN, HELP, ...EXTRAS];
 
+// לכל "עולם" צבע משלו, שמלווה אותו בכל המסכים שלו – כך יודעים איפה נמצאים בלי לקרוא
+export const WORLD_OF = { doc: 'letter', ask: 'letter', talk: 'talk', human: 'help', family: 'family',
+  emergency: 'emergency', meds: 'meds', learn: 'learn', lesson: 'learn' };
+
 // עובדות שחולצו מהמסמך – כל אחת עם אייקון, כדי שגם בלי לקרוא יבינו מה זה
 export const FACTS = [
-  { key: 'event',     icon: '🎉', ic: 'event', he: 'מה' },
-  { key: 'date',      icon: '📅', ic: 'calendar', he: 'תאריך' },
-  { key: 'time',      icon: '🕖', ic: 'clock', he: 'שעה' },
-  { key: 'place',     icon: '📍', ic: 'pin', he: 'מקום' },
-  { key: 'sender',    icon: '🏢', ic: 'building', he: 'מי שלח' },
-  { key: 'amount',    icon: '💰', ic: 'money', he: 'סכום' },
-  { key: 'deadline',  icon: '⏰', ic: 'alarm', he: 'עד מתי' },
-  { key: 'action_he', icon: '👉', ic: 'todo', he: 'מה לעשות' },
+  { key: 'event',     icon: '🎉', ic: 'event', tone: 'pink', he: 'מה' },
+  { key: 'date',      icon: '📅', ic: 'calendar', tone: 'red', he: 'תאריך' },
+  { key: 'time',      icon: '🕖', ic: 'clock', tone: 'indigo', he: 'שעה' },
+  { key: 'place',     icon: '📍', ic: 'pin', tone: 'green', he: 'מקום' },
+  { key: 'sender',    icon: '🏢', ic: 'building', tone: 'gray', he: 'מי שלח' },
+  { key: 'amount',    icon: '💰', ic: 'money', tone: 'mint', he: 'סכום' },
+  { key: 'deadline',  icon: '⏰', ic: 'alarm', tone: 'orange', he: 'עד מתי' },
+  { key: 'action_he', icon: '👉', ic: 'todo', tone: 'blue', he: 'מה לעשות' },
 ];
 
 export const EMERGENCY = [
-  { key: 'mda',    icon: '🚑', ic: 'emergency', number: '101', am: 'አምቡላንስ',   he: 'מד״א',
+  { key: 'mda',    icon: '🚑', ic: 'emergency', tone: 'red', number: '101', am: 'አምቡላንስ',   he: 'מד״א',
     sayAm: 'አምቡላንስ', sayHe: 'מגן דוד אדום' },
-  { key: 'police', icon: '👮', ic: 'shield', number: '100', am: 'ፖሊስ',      he: 'משטרה',
+  { key: 'police', icon: '👮', ic: 'shield', tone: 'blue', number: '100', am: 'ፖሊስ',      he: 'משטרה',
     sayAm: 'ፖሊስ', sayHe: 'משטרה' },
-  { key: 'fire',   icon: '🚒', ic: 'flame', number: '102', am: 'እሳት አደጋ', he: 'כיבוי אש',
+  { key: 'fire',   icon: '🚒', ic: 'flame', tone: 'orange', number: '102', am: 'እሳት አደጋ', he: 'כיבוי אש',
     sayAm: 'የእሳት አደጋ መከላከያ', sayHe: 'כבאות' },
 ];
 
